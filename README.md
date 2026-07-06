@@ -1,0 +1,128 @@
+# Open Mailgroupware: FOSS-First Architecture Docs
+
+This documentation set sketches a greenfield alternative to Zimbra-style mail and workgroupware.
+
+The core thesis is simple:
+
+> Build the product, control plane, abuse-management workflow, and UX from scratch. Glue proven open-source mail, identity, filtering, storage, and protocol components underneath.
+
+These docs are intentionally written as **Mermaid-first Markdown** so they can live directly in a GitHub repository, render in GitHub/GitLab, and evolve into architecture decision records.
+
+## Document index
+
+| Doc | Purpose |
+|---|---|
+| [`01-component-catalog.md`](./01-component-catalog.md) | FOSS/custom/commercial component map and replacement choices. |
+| [`02-greenfield-architecture.md`](./02-greenfield-architecture.md) | System architecture, deployment boundaries, and service graph. |
+| [`03-abuse-pipeline.md`](./03-abuse-pipeline.md) | Spam, phishing, malware, quarantine, and feedback loop design. |
+| [`04-domain-model-erd.md`](./04-domain-model-erd.md) | Core entity relationship model for tenants, users, mailboxes, messages, policies, quarantine, and audit. |
+| [`05-build-roadmap.md`](./05-build-roadmap.md) | MVP sequencing, build/buy/glue boundaries, and milestones. |
+
+## Architecture stance
+
+This is **not** a Zimbra fork.
+
+It is a new product layer on top of replaceable FOSS infrastructure:
+
+- SMTP transport
+- IMAP/JMAP mailbox access
+- CalDAV/CardDAV groupware
+- Rspamd-driven abuse filtering
+- ClamAV malware scanning
+- OIDC/LDAP identity integration
+- object/file storage
+- backup/restore orchestration
+- admin and end-user UX
+
+## Top-level component graph
+
+```mermaid
+flowchart TB
+  classDef custom fill:#e8f0fe,stroke:#1565c0,color:#111
+  classDef foss fill:#e8f7e8,stroke:#2e7d32,color:#111
+  classDef data fill:#f3e5f5,stroke:#6a1b9a,color:#111
+  classDef optional fill:#fff7d6,stroke:#f9a825,color:#111
+  classDef commercial fill:#fdeaea,stroke:#b71c1c,color:#111
+
+  Users[Users and admins]:::custom
+  Internet((Internet))
+
+  subgraph Product[Custom product layer]
+    Web[Modern web client]:::custom
+    Admin[Admin console/API]:::custom
+    Provisioner[Provisioning and config compiler]:::custom
+    AbuseConsole[Abuse console and quarantine workflow]:::custom
+    Migration[Migration/import/export service]:::custom
+    BackupCtl[Backup/restore controller]:::custom
+  end
+
+  subgraph Identity[Identity and tenancy]
+    OIDC[OIDC provider / Keycloak]:::foss
+    LDAP[LDAP compatibility adapter]:::foss
+    ProductDB[(Product DB / PostgreSQL)]:::data
+  end
+
+  subgraph MailTransport[Mail transport]
+    SMTP[SMTP ingress/submission<br/>Postfix, Stalwart SMTP, or Haraka]:::foss
+    Queue[Queue and delivery policy]:::foss
+  end
+
+  subgraph Abuse[Abuse filtering]
+    Rspamd[Rspamd policy/scoring engine]:::foss
+    ClamAV[ClamAV/clamd malware scan]:::foss
+    Reputation[DNSBL/URIBL/SURBL/reputation]:::optional
+    Quarantine[(Quarantine store)]:::data
+  end
+
+  subgraph Mailbox[Mailbox and groupware]
+    Store[Mailbox backend<br/>Stalwart, Dovecot, or Cyrus]:::foss
+    JMAP[JMAP API]:::foss
+    IMAP[IMAP/ManageSieve]:::foss
+    DAV[CalDAV/CardDAV/WebDAV]:::foss
+    Search[(Search index)]:::data
+    Blob[(Blob/object storage)]:::data
+  end
+
+  Users --> Web
+  Users --> Admin
+  Internet --> SMTP
+
+  Web --> JMAP
+  Web --> DAV
+  Admin --> ProductDB
+  Admin --> Provisioner
+  Admin --> AbuseConsole
+  Provisioner --> OIDC
+  Provisioner --> LDAP
+  Provisioner --> SMTP
+  Provisioner --> Rspamd
+  Provisioner --> Store
+
+  SMTP --> Rspamd
+  Rspamd --> ClamAV
+  Rspamd --> Reputation
+  Rspamd --> Quarantine
+  Rspamd --> Queue
+  Queue --> Store
+
+  Store --> JMAP
+  Store --> IMAP
+  Store --> DAV
+  Store --> Search
+  Store --> Blob
+
+  AbuseConsole --> Quarantine
+  Migration --> Store
+  BackupCtl --> Store
+  BackupCtl --> Blob
+```
+
+## Initial opinionated implementation choice
+
+For the first technical spike, evaluate two tracks:
+
+1. **Integrated backend track**: Stalwart as the mail/collaboration backend, with the custom product/control plane built around it.
+2. **Composable Unix mail track**: Postfix + Rspamd + ClamAV + Dovecot/Cyrus + DAV stack + custom product/control plane.
+
+The project should avoid rewriting SMTP, IMAP, virus scanning, spam scoring, and basic identity plumbing unless there is a very specific strategic reason.
+
