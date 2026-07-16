@@ -12,6 +12,7 @@ path = "src/main.rs"
 [dependencies]
 service-kit = { path = "../service-kit" }
 types = { workspace = true }
+wrappers = { path = "../wrappers" }
 axum = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }

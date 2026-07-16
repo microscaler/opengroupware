@@ -28,6 +28,7 @@ dependencies = [
  "tracing",
  "types",
  "uuid",
+ "wrappers",
 ]
 
 [[package]]

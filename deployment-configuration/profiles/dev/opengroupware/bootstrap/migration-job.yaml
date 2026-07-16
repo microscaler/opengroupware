@@ -12,11 +12,40 @@ spec:
       restartPolicy: OnFailure
       containers:
         - name: migrate
-          image: ghcr.io/microscaler/opengroupware/config-compiler:0.1.0
-          command: ["/app/config-compiler", "migrate", "--up"]
+          # admin-api owns the control-plane migrations (sqlx::migrate! on
+          # crates/admin-api/migrations). MIGRATE_ONLY=1 applies them and
+          # exits 0 — the binary never serves in Job mode. This Job runs
+          # with the PRIVILEGED role (DDL); the service deployment gets the
+          # restricted role and would refuse a privileged connection.
+          image: ghcr.io/microscaler/opengroupware/admin-api:0.1.0
+          command: ["/app/admin-api"]
           env:
             - name: RUST_LOG
               value: "info"
+            - name: MIGRATE_ONLY
+              value: "1"
+            # Migration role is privileged by nature; the RLS startup guard
+            # is explicitly waived for this Job only.
+            - name: OPENGROUPWARE_ALLOW_UNSAFE_DB
+              value: "1"
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-credentials
+                  key: username
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-credentials
+                  key: password
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-credentials
+                  key: database
+            # Direct to postgres (not pgbouncer) for DDL.
+            - name: DATABASE_URL
+              value: "postgres://$(DB_USER):$(DB_PASSWORD)@postgres-primary:5432/$(DB_NAME)"
           resources:
             requests:
               memory: "256Mi"

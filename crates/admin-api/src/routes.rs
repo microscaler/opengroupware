@@ -22,6 +22,9 @@ use crate::models::{
 #[derive(Clone)]
 pub struct AppState {
     pub db: Db,
+    /// None when SESAME_* env is absent (dev without an identity stack):
+    /// accounts then stay `pending_provisioning` for later reconciliation.
+    pub sesame: Option<std::sync::Arc<wrappers::sesame_client::SesameClient>>,
 }
 
 pub fn router(state: AppState) -> Router {
@@ -196,7 +199,82 @@ async fn create_account(
     )
     .await?;
     tx.commit().await?;
+
+    // Provision the identity in sesame-idam (ADR-0006 v2). Deliberately
+    // after commit: the row exists as pending_provisioning regardless, and
+    // a sesame outage must not fail account creation — reconciliation can
+    // retry. Success flips the account active in a second transaction.
+    let account = match &state.sesame {
+        Some(sesame) => {
+            provision_into_sesame(&state, sesame, tenant_id, account, &actor(&headers)).await
+        }
+        None => account,
+    };
+
     Ok((axum::http::StatusCode::CREATED, Json(account)))
+}
+
+/// Best-effort sesame provisioning; returns the (possibly updated) account.
+async fn provision_into_sesame(
+    state: &AppState,
+    sesame: &wrappers::sesame_client::SesameClient,
+    tenant_id: Uuid,
+    account: Account,
+    actor: &str,
+) -> Account {
+    let provisioned = sesame
+        .provision_user(&account.email, &account.display_name)
+        .await;
+    let sesame_user_id = match provisioned {
+        Ok(id) => id,
+        Err(e) => {
+            tracing::warn!(
+                account = %account.id, error = %e,
+                "sesame provisioning failed — account stays pending_provisioning"
+            );
+            return account;
+        }
+    };
+
+    let update = async {
+        let mut tx = state.db.tenant_tx(tenant_id).await?;
+        let updated: Account = sqlx::query_as(
+            "UPDATE accounts
+             SET status = 'active', sesame_user_id = $2, updated_at = now()
+             WHERE id = $1
+             RETURNING id, tenant_id, domain_id, email, display_name, quota_mb,
+                       status, created_at",
+        )
+        .bind(account.id)
+        .bind(sesame_user_id)
+        .fetch_one(&mut *tx)
+        .await?;
+        record(
+            &mut tx,
+            AuditEntry {
+                tenant_id: Some(tenant_id),
+                actor,
+                action: "account.provisioned",
+                entity_type: "account",
+                entity_id: updated.id.to_string(),
+                payload: serde_json::json!({ "sesame_user_id": sesame_user_id }),
+            },
+        )
+        .await?;
+        tx.commit().await?;
+        Ok::<Account, sqlx::Error>(updated)
+    };
+
+    match update.await {
+        Ok(updated) => updated,
+        Err(e) => {
+            tracing::error!(
+                account = %account.id, error = %e,
+                "sesame user created but local activation failed — reconciliation needed"
+            );
+            account
+        }
+    }
 }
 
 async fn list_accounts(

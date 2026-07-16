@@ -39,6 +39,44 @@ spec:
               value: "info"
             - name: RUST_BACKTRACE
               value: "0"
+            # DATABASE_URL composed via k8s dependent-env expansion. The
+            # service role must NOT be privileged: admin-api refuses to
+            # start on superuser/BYPASSRLS connections (RLS guard).
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-credentials
+                  key: username
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-credentials
+                  key: password
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-credentials
+                  key: database
+            - name: DATABASE_URL
+              value: "postgres://$(DB_USER):$(DB_PASSWORD)@pgbouncer:6432/$(DB_NAME)"
+            # sesame-idam integration (ADR-0006 v2). Absent/empty values
+            # disable provisioning (accounts stay pending_provisioning).
+            - name: SESAME_LOGIN_URL
+              value: "http://sesame-idam-login.sesame-idam.svc.cluster.local:8080"
+            - name: SESAME_USER_MGMT_URL
+              value: "http://sesame-idam-user-mgmt.sesame-idam.svc.cluster.local:8080"
+            - name: SESAME_TENANT
+              value: "opengroupware"
+            - name: SESAME_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: sesame-idam-integration
+                  key: client-id
+            - name: SESAME_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: sesame-idam-integration
+                  key: client-secret
           livenessProbe:
             httpGet:
               path: /health

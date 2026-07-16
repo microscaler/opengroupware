@@ -5,6 +5,7 @@
 
 pub mod minio_storage;
 pub mod rspamd_abuse;
+pub mod sesame_client;
 pub mod stalwart;
 pub mod stalwart_backup;
 pub mod stalwart_identity;
