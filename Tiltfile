@@ -46,7 +46,9 @@ print('OpenGroupware Tilt: FLUX_OWNS_DEPLOY=%s (shared-k8s=%s)' % (
 update_settings(k8s_upsert_timeout_secs=60)
 
 # Rust/cargo on ms02 (rustup) — local_resource cmd does not load login shells.
-RUST_ENV_PREFIX = 'export PATH="$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:$PATH" && '
+# The find prunes macOS AppleDouble (._*) files that Mac-side edits create
+# over NFS — sqlx::migrate!() scans migration dirs and chokes on them.
+RUST_ENV_PREFIX = 'export PATH="$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:$PATH" && find crates -name "._*" -delete 2>/dev/null; '
 
 docker_prune_settings(
     disable=False,
