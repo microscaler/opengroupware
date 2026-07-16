@@ -1,0 +1,210 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/types",
+    "crates/config-schema",
+    "crates/wrappers",
+    "crates/admin-api",
+    "crates/config-compiler",
+    "crates/abuse-api",
+    "crates/job-runner",
+    "crates/webmail",
+    "crates/admin-console",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+
+[workspace.dependencies]
+# Internal
+types = { path = "crates/types" }
+config-schema = { path = "crates/config-schema" }
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+futures = "0.3"
+
+# HTTP (axum)
+axum = { version = "0.8", features = ["macros", "multipart"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["trace", "cors"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_urlencoded = "0.7"
+
+# Database (PostgreSQL)
+sqlx = { version = "0.8", features = [
+    "runtime-tokio",
+    "tls-rustls",
+    "postgres",
+    "uuid",
+    "chrono",
+    "json",
+    "migrate",
+] }
+tokio-postgres = { version = "0.7", features = ["tls-rustls"] }
+
+# Redis
+redis = { version = "0.30", features = ["tokio-comp", "cluster", "aio"] }
+
+# Logging/observability
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+opentelemetry = "0.28"
+opentelemetry-otlp = "0.28"
+
+# Errors
+thiserror = "2"
+
+# HTTP client (for outbound, Rspamd, Stalwart API)
+reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+http = "1"
+
+# Config / env
+serde_path_to_error = "0.1"
+config = "0.15"
+
+# UUID
+uuid = { version = "1", features = ["v4", "serde"] }
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Cryptography
+rsa = "0.9"
+ring = "0.17"
+
+# Helm chart generation
+handlebars = "6.3.0"
+
+# Testing
+tempfile = "3"
+criterion = "0.5"
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# ---------------------------------------------------------------------------
+# Clippy — pedantic + JSF code quality gates
+# ---------------------------------------------------------------------------
+# JSF rules (project standard):
+#   - cognitive_complexity ≤ 30
+#   - too_many_arguments ≤ 8
+#   - stack_size ≤ 512KB (512000 bytes)
+#   - no implicit boxing in hot paths (Box<dyn Trait> requires explicit fn
+#     return types — no "fn foo() -> Box<dyn Provider>")
+#   - no panicking in non-test code: unwrap/expect/push_unwrap/borrow_mut
+#     unwrap -> must be replaced by ? or explicit error handling
+#   - explicit return types on all public functions and all methods that
+#     appear in a trait definition
+#   - no recursion (tail or otherwise) — use iterative loops
+#   - no heap allocation after initialization — collect/extend/reserve
+#     at construction time
+#
+# Clippy groups:
+#   all         — everything clippy catches
+#   pedantic    — style, correctness, perf suggestions
+#   nursery     — unstable lints (safe, low noise)
+#
+# Exceptions (pedantic noise):
+#   - single_use_lifetime: too noisy for struct impl blocks
+#   - module_inception: self-referential modules are fine
+#   - must_catch_drop: false positives on Drop impls
+#   - missing_docs: ON in CI, allow locally (developer flow)
+#   - too_many_lines: individual files are fine to be long
+#   - cast_possible_truncation, etc: allow for config/env parsing where
+#     values are validated before casting
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+
+# JSF enforcement (high priority)
+# Thresholds are in clippy.toml
+cognitive_complexity = { level = "warn", priority = 100 }
+too_many_arguments = { level = "warn", priority = 100 }
+stack_size = { level = "warn", priority = 100 }
+
+# No-panicking — forbid ALL panicking constructs in production code
+# unwrap_used, expect_used, panic!(), assert!(), unreachable!() all forbidden
+# The `#[cfg(test)]` allow is applied at the module level per crate.
+unwrap_used = "forbid"
+expect_used = "forbid"
+panic = "forbid"
+
+# Pedantic exceptions
+module_inception = "allow"
+single_component_path_imports = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+missing_safety_doc = "warn"
+cast_possible_truncation = "allow"
+cast_possible_wrap = "allow"
+cast_precision_loss = "allow"
+cast_sign_loss = "allow"
+default_trait_access = "allow"
+doc_markdown = "allow"
+explicit_iter_loop = "allow"
+implicit_hasher = "allow"
+implicit_clone = "allow"
+items_after_statements = "allow"
+invalid_upcast_comparisons = "allow"
+manual_let_else = "allow"
+many_single_char_names = "allow"
+match_bool = "allow"
+match_wildcard_for_single_variants = "allow"
+mod_module_files = "allow"
+needless_pass_by_value = "allow"
+option_if_let_else = "allow"
+redundant_closure_for_method_calls = "allow"
+redundant_else = "allow"
+semicolon_if_nothing_returned = "allow"
+str_to_string = "allow"
+string_add = "allow"
+string_lit_chars_any = "allow"
+struct_excessive_bools = "allow"
+struct_field_names = "allow"
+test_attr_in_test = "allow"
+transmute_ptr_to_ptr = "allow"
+unnecessary_self_imports = "allow"
+unneeded_field_pattern = "allow"
+unseparated_literal_suffix = "allow"
+use_self = "allow"
+used_underscore_binding = "allow"
+redundant_pub_crate = "allow"
+derivable_impls = "allow"
+
+# ---------------------------------------------------------------------------
+# Modularity — file organization rules
+# ---------------------------------------------------------------------------
+# File-length limits are enforced via pre-commit hook (cargo-fmt + custom
+# script), NOT clippy — clippy doesn't support per-lint thresholds in
+# Cargo.toml. The thresholds are documented here for reference.
+#
+#   Max function length:  60 lines (extract if exceeded)
+#   Max impl block:      200 lines (split if exceeded)
+#   Max struct fields:     8 fields (use extension structs if exceeded)
+#
+# Type complexity: warn when a type has too many generic params or deeply
+# nested generics. This catches over-parameterized types.
+type_complexity = { level = "warn", priority = 50 }
+
+# ---------------------------------------------------------------------------
+# Rustc — language-level constraints
+# ---------------------------------------------------------------------------
+[workspace.lints.rust]
+unsafe_code = "forbid"
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ci)'] }
+deprecated = "warn"
+dead_code = "warn"
+non_upper_case_globals = "warn"
+non_camel_case_types = "warn"
+non_snake_case = "warn"
+unused_imports = { level = "warn", priority = 100 }
+unused_variables = "warn"
+unused_must_use = "warn"

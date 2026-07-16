@@ -1,0 +1,11 @@
+[package]
+name = "config-schema"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "JSON schema validation for config compiler output"
+license = "AGPL-3.0-or-later"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }

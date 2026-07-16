@@ -1,0 +1,21 @@
+[package]
+name = "wrappers"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Concrete provider implementations — Stalwart, Rspamd, MinIO"
+license = "AGPL-3.0-or-later"
+
+[dependencies]
+types = { path = "../types" }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+async-trait = "0.1"
+base64 = "0.22"
+hmac = "0.12"
+sha2 = "0.10"

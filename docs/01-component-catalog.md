@@ -11,33 +11,30 @@ Labels:
 
 ## Component status map
 
-| Layer | Component | Candidate implementation | Label | Notes |
+| Layer | Component | Implementation | Label | Notes |
 |---|---|---|---|---|
 | Admin/control plane | Admin UI/API | Custom app | Custom product | Domain, user, policy, queue, abuse, backup, and migration surface. |
-| Provisioning | Config compiler | Custom service | Custom product | Converts product model into Postfix/Rspamd/Dovecot/Stalwart/etc. config. |
+| Provisioning | Config compiler | Custom service | Custom product | Converts product model into Stalwart/Rspamd config. |
 | Web UX | Webmail/calendar/contacts | Custom web app | Custom product | Product-defining experience. Do not copy legacy Zimbra UX. |
-| Identity | OIDC | Keycloak, Authentik, Zitadel CE, external IdP | FOSS/replaceable | Prefer OIDC-first; keep LDAP compatibility for mail components. |
-| Directory compatibility | LDAP | OpenLDAP, LLDAP, custom read-only LDAP adapter | FOSS/replaceable | Useful for legacy components and enterprise integrations. |
-| SMTP ingress | MTA | Postfix, Stalwart SMTP, Haraka, OpenSMTPD | FOSS/replaceable | Do not rewrite early. |
-| SMTP submission | MSA | Postfix or Stalwart SMTP | FOSS/replaceable | Needs auth, rate limits, outbound abuse controls. |
-| Abuse engine | Spam/phishing scoring | Rspamd | FOSS commodity | Best default center of gravity for policy/scoring. |
-| Malware scan | AV daemon | ClamAV/clamd | FOSS commodity | Integrate through Rspamd or MTA filter path. |
-| Policy state | Cache/state | Redis or Valkey | FOSS commodity | Rspamd state, rate limits, greylisting, reputation. |
-| Mailbox | Store/backend | Stalwart, Dovecot, Cyrus | FOSS/replaceable | Biggest architecture decision. |
-| Mail client protocol | IMAP | Dovecot/Cyrus/Stalwart | FOSS commodity | Required for broad compatibility. |
-| Modern app protocol | JMAP | Stalwart or dedicated gateway | FOSS/replaceable | Better basis for a modern web app than IMAP. |
-| Filters | Sieve/ManageSieve | Dovecot/Cyrus/Stalwart Sieve | FOSS commodity | User mail rules and server-side filtering. |
-| Calendar | CalDAV/JMAP Calendar | Stalwart, Radicale, DAViCal, SabreDAV, custom | FOSS/replaceable | Needs scheduling, invites, free/busy, sharing. |
-| Contacts | CardDAV/JMAP Contacts | Stalwart, Radicale, SabreDAV, custom | FOSS/replaceable | Needs address books, GAL, sharing. |
-| Search | Search engine | backend-native, OpenSearch, Xapian, Tantivy, Meilisearch | FOSS/replaceable | Keep indexing boundary isolated. |
-| Blob storage | Message/attachment storage | filesystem, S3-compatible object store | FOSS/replaceable | Design for S3-compatible storage from the start. |
-| Product DB | Metadata/control DB | PostgreSQL | FOSS commodity | Tenants, domains, policies, jobs, audit, quarantine metadata. |
-| Observability | Metrics/logs/traces | Prometheus, Grafana, Loki, OpenTelemetry | FOSS commodity | Required for serious operations. |
-| Backup | Backup/restore | Restic/Borg/snapshots/custom orchestrator | FOSS/custom | Productize restore flows early. |
-| Migration | Import/export | imapsync, custom Zimbra TGZ parser, DAV import | FOSS/custom | Critical wedge for adoption. |
-| Mobile enterprise | ActiveSync/EAS | z-push, commercial bridge, custom later | Optional commercial | Defer. IMAP + CalDAV/CardDAV first. |
-| Outlook enterprise | EWS/MAPI | commercial bridge/custom later | Optional commercial | Defer. Huge compatibility sink. |
-| Compliance | Legal hold/eDiscovery | custom archive service later | Optional commercial | Defer until core is reliable. |
+| Identity | OIDC | Authentik | FOSS/replaceable | SaaS-native multi-tenancy. |
+| Directory compatibility | LDAP | LLDAP | FOSS/replaceable | Lightweight Rust LDAP server. |
+| SMTP ingress | MTA | Stalwart SMTP | FOSS/commodity | Track A integrated backend. |
+| Abuse engine | Spam/phishing scoring | Rspamd | FOSS/commodity | Multi-tenant capable via Redis key prefixing. |
+| Malware scan | AV daemon | ClamAV/clamd | FOSS/commodity | Stateless — no multi-tenant concerns. |
+| Policy state | Cache/state | Redis | FOSS/commodity | ACL-based key prefixing for tenant isolation. |
+| Mailbox | Store/backend | Stalwart | FOSS/commodity | Track A integrated backend — IMAP, JMAP, CalDAV, CardDAV all included. |
+| Filters | Sieve/ManageSieve | Stalwart Sieve | FOSS/commodity | Tenant-isolated via parent backend. |
+| Calendar | CalDAV/JMAP Calendar | Stalwart | FOSS/commodity | Built into Stalwart stack. |
+| Contacts | CardDAV/JMAP Contacts | Stalwart | FOSS/commodity | Built into Stalwart stack. |
+| Search | Search engine | Tantivy | FOSS/commodity | Embedded Rust library — no separate service. Tenant-scoped index files. |
+| Blob storage | Message/attachment storage | MinIO | FOSS/commodity | S3-compatible. Prefix + IAM for tenant isolation. |
+| Product DB | Metadata/control DB | PostgreSQL | FOSS/commodity | RLS for tenant isolation. |
+| Observability | Metrics/logs/traces | Prometheus, Grafana, Loki, OpenTelemetry | FOSS/commodity | Required for serious operations. |
+| Backup | Backup/restore | pgBackRest + Restic | FOSS/custom | Per-tenant schema restore via pgBackRest; blob via Restic. |
+| Migration | Import/export | imapsync + custom orchestrator | FOSS/custom | IMAP-based migration with checkpoint/resume. |
+| Mobile enterprise | ActiveSync/EAS | Defer | Defer | IMAP + CalDAV/CardDAV first. |
+| Outlook enterprise | EWS/MAPI | Defer | Defer | Huge compatibility sink. |
+| Compliance | Legal hold/eDiscovery | Defer | Defer | Defer until core is reliable. |
 || DMARC reporting | Aggregate/forensic reports | Rspamd + custom receiver service | FOSS/commercial | Receive and store DMARC reports for deliverability analysis. |
 || DMARC auto-remediation | Auto-apply DMARC policy | Rspamd policy integration | FOSS commodity | Reject/quarantine based on DMARC fail — no manual config needed. |
 || Outbound shadow-copy | Enterprise security BCC | Custom service or Rspamd BCC | FOSS/commercial | Shadow-copy outbound messages for security audit. |
@@ -50,7 +47,6 @@ Labels:
 flowchart LR
   classDef custom fill:#e8f0fe,stroke:#1565c0,color:#111
   classDef foss fill:#e8f7e8,stroke:#2e7d32,color:#111
-  classDef replaceable fill:#fff7d6,stroke:#f9a825,color:#111
   classDef data fill:#f3e5f5,stroke:#6a1b9a,color:#111
   classDef optional fill:#fdeaea,stroke:#b71c1c,color:#111
 
@@ -60,17 +56,15 @@ flowchart LR
   AbuseUI[Abuse/quarantine UX<br/>Custom]:::custom
   ProductDB[(PostgreSQL<br/>Product DB)]:::data
 
-  OIDC[OIDC provider<br/>Keycloak/AuthentiK/external]:::replaceable
-  LDAP[LDAP adapter<br/>OpenLDAP/LLDAP/custom]:::replaceable
+  OIDC[Authentik<br/>OIDC provider]:::foss
+  LDAP[LLDAP<br/>LDAP adapter]:::foss
 
-  MTA[SMTP/MTA<br/>Postfix/Stalwart/Haraka]:::replaceable
+  Stalwart[Stalwart<br/>SMTP/IMAP/JMAP/CalDAV]:::foss
   Rspamd[Rspamd<br/>spam/phishing/policy]:::foss
   ClamAV[ClamAV/clamd<br/>malware scan]:::foss
-  Redis[(Redis/Valkey<br/>filter state)]:::data
-  Mailbox[Mailbox backend<br/>Stalwart/Dovecot/Cyrus]:::replaceable
-  DAV[DAV/JMAP groupware<br/>Stalwart/Radicale/custom]:::replaceable
-  Search[(Search index)]:::data
-  Blob[(Blob/object storage)]:::data
+  Redis[(Redis<br/>filter state)]:::data
+  MinIO[MinIO<br/>S3-compatible blob]:::foss
+  Search[(Tantivy<br/>search index)]:::data
 
   ActiveSync[ActiveSync/EWS/MAPI<br/>later]:::optional
   Archive[eDiscovery/legal hold<br/>later]:::optional
@@ -80,23 +74,21 @@ flowchart LR
   Admin --> AbuseUI
   Provisioner --> OIDC
   Provisioner --> LDAP
-  Provisioner --> MTA
+  Provisioner --> Stalwart
   Provisioner --> Rspamd
-  Provisioner --> Mailbox
-  Provisioner --> DAV
+  Provisioner --> MinIO
 
-  Web --> Mailbox
-  Web --> DAV
+  Web --> Stalwart
   Web --> Search
 
-  MTA --> Rspamd
+  Stalwart --> Rspamd
   Rspamd --> ClamAV
   Rspamd --> Redis
-  Rspamd --> Mailbox
-  Mailbox --> Search
-  Mailbox --> Blob
-  Mailbox --> ActiveSync
-  Mailbox --> Archive
+  Rspamd --> Stalwart
+  Stalwart --> Search
+  Stalwart --> MinIO
+  Stalwart --> ActiveSync
+  Stalwart --> Archive
 ```
 
 ## Build/glue/buy boundaries
@@ -114,16 +106,16 @@ mindmap
       Backup/restore UX
       Tenant billing hooks if needed
     Glue FOSS components
-      Postfix or Stalwart SMTP
+      Stalwart (SMTP/IMAP/JMAP/CalDAV/CardDAV)
       Rspamd
       ClamAV
-      Dovecot/Cyrus/Stalwart
-      Keycloak/OIDC
-      OpenLDAP/LLDAP adapter
+      Authentik (OIDC)
+      LLDAP (LDAP)
       PostgreSQL
-      Redis/Valkey
-      Object storage
-      Prometheus/Grafana/Loki
+      Redis
+      MinIO (S3-compatible)
+      Tantivy
+      Prometheus/Grafana/Loki/pgBackRest/Restic
     Defer or commercialize
       ActiveSync
       EWS/MAPI/Outlook connector
@@ -133,33 +125,29 @@ mindmap
       HA automation
 ```
 
-## Recommended candidate stacks
-
-### Track A — Integrated backend
+## Selected stack (Track A + K8s)
 
 ```mermaid
 flowchart TB
   Product[Custom product plane] --> Stalwart[Stalwart mail/collaboration server]
-  Product --> Rspamd[Rspamd if used externally or for custom policy]
-  Stalwart --> Storage[(Storage/search/auth backends)]
-  Stalwart --> Protocols[JMAP/IMAP/POP3/SMTP/CalDAV/CardDAV/WebDAV]
-```
+  Product --> Rspamd[Rspamd policy engine]
+  Stalwart --> Storage[(MinIO S3 + PostgreSQL + Tantivy)]
+  Stalwart --> Protocols[JMAP/IMAP/SMTP/CalDAV/CardDAV]
+  Product --> Redis[(Redis filter state)]
+  Product --> OIDC[Authentik OIDC]
 
-Best when the priority is a modern backend and fewer moving parts.
-
-### Track B — Composable Unix stack
-
-```mermaid
-flowchart TB
-  Product[Custom product plane] --> Postfix[Postfix]
-  Product --> Dovecot[Dovecot or Cyrus]
-  Product --> DAV[CalDAV/CardDAV service]
-  Postfix --> Rspamd[Rspamd]
+  Stalwart --> Rspamd
   Rspamd --> ClamAV[ClamAV]
-  Rspamd --> Dovecot
-  Dovecot --> Storage[(Mail storage)]
-  DAV --> DB[(Groupware DB)]
+  Rspamd --> Redis
 ```
 
-Best when the priority is conservative components, operational familiarity, and easy replacement of individual services.
+Stalwart is the integrated backend — it provides SMTP, IMAP, JMAP, CalDAV,
+CardDAV, and Sieve in a single Rust codebase with native multi-tenancy. The
+custom product plane sits above it: admin API, config compiler, web UI, abuse
+console, migration tool, and backup controller. All infrastructure (Stalwart,
+Rspamd, ClamAV, Redis, MinIO, PostgreSQL, Authentik, Tantivy) is deployed via
+Helm charts in Kubernetes, managed with GitOps (ArgoCD or Flux).
+
+Track B (Postfix/Dovecot) remains documented for reference but is superseded
+by Track A for the reasons in the component audit.
 

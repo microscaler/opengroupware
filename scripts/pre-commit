@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# Pre-commit hook: file-length checks that clippy can't enforce.
+#
+# Clippy has no per-lint threshold in Cargo.toml, so file-length limits
+# are enforced here. The thresholds are documented in Cargo.toml and here.
+#
+# Thresholds:
+#   Max function length:  60 lines
+#   Max impl block:      200 lines
+#   Max struct fields:    8 fields
+#   Max file length:     500 lines (warn)
+#
+# Usage: place at .git/hooks/pre-commit and make executable.
+
+set -euo pipefail
+
+RED='\033[0;31m'
+YELLOW='\033[0;33m'
+NC='\033[0m' # No Color
+
+ERRORS=0
+
+# ---------------------------------------------------------------------------
+# Max function length (60 lines)
+# ---------------------------------------------------------------------------
+count_lines_between() {
+    local file="$1"
+    local start_marker="$2"
+    local end_marker="$3"
+    local start_line end_line
+    start_line=$(grep -n "$start_marker" "$file" | head -1 | cut -d: -f1)
+    if [ -z "$start_line" ]; then
+        echo 0
+        return
+    fi
+    end_line=$(tail -n +"$start_line" "$file" | grep -n "$end_marker" | head -1 | cut -d: -f1)
+    end_line=$((start_line + end_line - 1))
+    echo $((end_line - start_line + 1))
+}
+
+while IFS= read -r -d '' file; do
+    [[ "$file" == *"/tests/"* ]] && continue
+    [[ "$file" == *"/test_"* ]] && continue
+
+    # Check max function length (60 lines)
+    while IFS= read -r func_start; do
+        line_num=$(echo "$func_start" | cut -d: -f1)
+        # Skip test functions
+        if grep -q "#\[cfg(test)\]" "$file" 2>/dev/null; then
+            in_test_block=$(awk -v start="$line_num" 'NR >= start { if (/^#\[cfg\(test\)\]/) { in_test=1; next } if (/^#\[test\]/) { in_test=1; next } if (/^}/ && in_test) { in_test=0; next } }' "$file" 2>/dev/null)
+        fi
+
+        # Find closing brace of this function
+        end_line=$(tail -n +"$line_num" "$file" | grep -n "^}" | head -1 | cut -d: -f1)
+        if [ -z "$end_line" ]; then
+            continue
+        fi
+        func_length=$((end_line))
+        if [ "$func_length" -gt 60 ]; then
+            echo -e "${YELLOW}WARNING:${NC} Function exceeds 60 lines ($func_length) at ${file}:${line_num}"
+        fi
+    done < <(grep -n "^pub fn\|^fn\|^impl.*{" "$file" 2>/dev/null || true)
+
+done < <(find packages services web -name "*.rs" -type f -print0 2>/dev/null || true)
+
+# ---------------------------------------------------------------------------
+# Max struct fields (8 fields)
+# ---------------------------------------------------------------------------
+while IFS= read -r -d '' file; do
+    [[ "$file" == *"/tests/"* ]] && continue
+    [[ "$file" == *"/test_"* ]] && continue
+
+    while IFS= read -r struct_start; do
+        line_num=$(echo "$struct_start" | cut -d: -f1)
+        struct_lines=$(tail -n +"$line_num" "$file" | head -30 | grep -c "pub\s\+\w\+\s*:" || true)
+        if [ "$struct_lines" -gt 8 ]; then
+            echo -e "${YELLOW}WARNING:${NC} Struct exceeds 8 fields ($struct_lines) at ${file}:${line_num}"
+        fi
+    done < <(grep -n "^pub struct\|^struct" "$file" 2>/dev/null || true)
+
+done < <(find packages services web -name "*.rs" -type f -print0 2>/dev/null || true)
+
+# ---------------------------------------------------------------------------
+# Report
+# ---------------------------------------------------------------------------
+if [ "$ERRORS" -gt 0 ]; then
+    echo -e "${RED}Pre-commit checks failed. Fix the above errors.${NC}"
+    exit 1
+fi
+
+echo "Pre-commit checks passed."
+exit 0

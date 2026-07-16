@@ -298,20 +298,31 @@ flowchart TB
   MailProvider --> Dovecot[Dovecot/Cyrus]
 
   AbuseProvider --> Rspamd[Rspamd]
-  AbuseProvider --> FutureAbuse[Future abuse engine]
 
   IdentityProvider --> Keycloak[Keycloak/OIDC]
   IdentityProvider --> LDAP[LDAP/external directory]
 
-  StorageProvider --> FS[Filesystem]
   StorageProvider --> S3[S3-compatible]
 
-  SearchProvider --> Native[Backend-native]
-  SearchProvider --> OpenSearch[OpenSearch/Tantivy/etc.]
+  SearchProvider --> Tantivy[Tantivy]
+  SearchProvider --> OpenSearch[OpenSearch]
 
-  BackupProvider --> Restic[Restic/Borg]
-  BackupProvider --> Snapshot[Storage snapshots]
+  BackupProvider --> Restic[Restic]
+  BackupProvider --> PgBackRest[pgBackRest]
 ```
+
+## Decision gates (closed)
+
+| Gate | Decision | Date | Document |
+|------|----------|------|----------|
+| Mailbox backend | **Track A: Stalwart** (integrated stack) | 2026-07-16 | ADR-0004 |
+| Deployment target | **Kubernetes** with Helm + GitOps | 2026-07-16 | ADR-0011 |
+| Search engine | **Tantivy** (embedded, Rust-native) | 2026-07-16 | ADR-0004 |
+| Abuse engine | **Rspamd** (multi-tenant capable) | 2026-07-16 | ADR-0002 |
+| Cache | **Redis** with ACL for key prefixing | 2026-07-16 | — |
+| Blob storage | **MinIO** (self-hosted) or **Cloud S3** | 2026-07-16 | — |
+| OIDC provider | **Authentik** (native SaaS multi-tenancy) | 2026-07-16 | ADR-0004 |
+| Backup | **pgBackRest** (PostgreSQL) + **Restic** (blob) | 2026-07-16 | ADR-0006 |
 
 ## Early repository layout
 

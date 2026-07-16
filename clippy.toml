@@ -1,0 +1,22 @@
+# ============================================================================
+# Clippy.toml — top-level clippy configuration
+#
+# ONLY threshold values go here. All allow/forbid/warn lints go in
+# Cargo.toml's [workspace.lints.clippy] section.
+#
+# Valid keys: cognitive-complexity-threshold, too-many-arguments-threshold,
+#             stack-size-threshold, single-char-binding-names-threshold,
+#             missing-docs-in-crate-items-threshold,
+#             struct-field-name-threshold, pass-by-value-size-limit,
+#             trivial-copy-size-limit, too-large-for-stack,
+#             match-wildcard-for-single-variant-threshold,
+#             match-result-allow-unwrap-threshold,
+#             doc-valid-idents, disallowed-names, disallowed-types,
+#             disallowed-macros, disallowed-methods, disallowed-types,
+#             allowed-wildcard-imports, allowed-dbg-macros
+# ============================================================================
+
+# JSF thresholds
+cognitive-complexity-threshold = 30
+too-many-arguments-threshold = 8
+stack-size-threshold = 512000
