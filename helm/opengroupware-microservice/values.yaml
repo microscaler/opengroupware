@@ -1,14 +1,15 @@
 # Default values for opengroupware-microservice.
 # Override these with service-specific values files.
 
+# === Custom Rust services ===
 service:
-  name: ""            # e.g. admin-api, abuse-api, job-runner
+  name: ""
   port: 8080
   containerPort: 8080
 
 image:
   repository: ghcr.io/microscaler/opengroupware
-  name: ""            # e.g. admin-api
+  name: ""
   tag: "0.1.0"
   pullPolicy: IfNotPresent
 
@@ -18,8 +19,8 @@ deployment:
   strategy: RollingUpdate
 
 app:
-  binaryName: ""      # e.g. admin-api
-  serviceName: ""     # For OTEL service name
+  binaryName: ""
+  serviceName: ""
 
 resources:
   requests:
@@ -53,3 +54,276 @@ prometheus:
   path: "/metrics"
 
 extraEnv: []
+
+# === External / wrapped infrastructure services ===
+external:
+  # PostgreSQL — product database
+  postgresql:
+    enabled: true
+    image: docker.io/postgres:16-alpine
+    port: 5432
+    replicas: 1
+    params:
+      shared_preload_libraries: pg_stat_statements
+      max_connections: 200
+    credentials:
+      username: opengroupware
+    resources:
+      requests:
+        memory: "1Gi"
+        cpu: "500m"
+      limits:
+        memory: "4Gi"
+        cpu: "2000m"
+    persistence:
+      size: 50Gi
+      storageClassName: standard
+
+  # Redis — filter state, sessions, rate limiting
+  redis:
+    enabled: true
+    image: docker.io/redis:7-alpine
+    port: 6379
+    replicas: 1
+    maxmemory: "256mb"
+    maxmemoryPolicy: allkeys-lru
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "100m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+
+  # pgBouncer — PostgreSQL connection pooling
+  pgbouncer:
+    enabled: true
+    image: docker.io/deitch/pgbouncer:latest
+    port: 6432
+    replicas: 1
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "25m"
+      limits:
+        memory: "64Mi"
+        cpu: "50m"
+
+  # ClamAV — malware scanning (called by Rspamd)
+  clamav:
+    enabled: true
+    image: docker.io/clamav/clamav:latest
+    port: 3310
+    replicas: 1
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "50m"
+      limits:
+        memory: "256Mi"
+        cpu: "200m"
+
+  # Stalwart — SMTP/IMAP/JMAP/CalDAV/CardDAV
+  stalwart:
+    enabled: true
+    image: ghcr.io/stalwart-mail/stalwart-mail:latest
+    replicas: 1
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "200m"
+      limits:
+        memory: "2Gi"
+        cpu: "1000m"
+    database:
+      host: postgres-primary
+      port: 5432
+    storage:
+      backend: s3
+      endpoint: minio:9000
+      bucket: opengroupware
+    redis:
+      host: redis
+      port: 6379
+
+  # Rspamd — spam/phishing/scoring policy
+  rspamd:
+    enabled: true
+    image: docker.io/rspamd/rspamd:latest
+    replicas: 1
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "100m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+
+  # MinIO — S3-compatible blob storage
+  minio:
+    enabled: true
+    image: docker.io/minio/minio:latest
+    replicas: 1
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "200m"
+      limits:
+        memory: "1Gi"
+        cpu: "500m"
+    persistence:
+      enabled: true
+      size: 50Gi
+      storageClassName: standard
+      accessModes: ["ReadWriteOnce"]
+
+  # Search (OpenSearch) — full-text search
+  search:
+    enabled: true
+    image: docker.io/opensearchproject/opensearch:2.11
+    port: 9200
+    replicas: 1
+    healthPath: "/_cluster/health"
+    clusterInitialMasterNodes: "search-0"
+    discoverySeedHosts: "search-0.search-headless.opengroupware.svc.cluster.local"
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "200m"
+      limits:
+        memory: "2Gi"
+        cpu: "1000m"
+    persistence:
+      enabled: true
+      size: 50Gi
+      storageClassName: standard
+      accessModes: ["ReadWriteOnce"]
+
+  # Authentik — OIDC identity provider
+  authentik:
+    enabled: true
+    image: ghcr.io/goauthentik/server:2024
+    httpPort: 9000
+    httpsPort: 9443
+    replicas: 1
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "200m"
+      limits:
+        memory: "1Gi"
+        cpu: "500m"
+    persistence:
+      size: 10Gi
+      storageClassName: standard
+
+  # LLDAP — LDAP directory compatibility
+  lldap:
+    enabled: true
+    image: docker.io/greenweb/lldap:latest
+    ldapPort: 389
+    httpsPort: 636
+    httpPort: 8080
+    replicas: 1
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "25m"
+      limits:
+        memory: "64Mi"
+        cpu: "50m"
+    persistence:
+      size: 5Gi
+      storageClassName: standard
+
+  # Prometheus — metrics collection
+  prometheus:
+    enabled: true
+    image: docker.io/prom/prometheus:latest
+    port: 9090
+    replicas: 1
+    retention: "15d"
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "200m"
+      limits:
+        memory: "2Gi"
+        cpu: "1000m"
+    persistence:
+      size: 50Gi
+      storageClassName: standard
+
+  # Grafana — dashboards
+  grafana:
+    enabled: true
+    image: docker.io/grafana/grafana:latest
+    port: 3000
+    replicas: 1
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "50m"
+      limits:
+        memory: "256Mi"
+        cpu: "200m"
+    persistence:
+      size: 10Gi
+      storageClassName: standard
+
+  # Loki — log aggregation
+  loki:
+    enabled: true
+    image: docker.io/grafana/loki:latest
+    port: 3100
+    replicas: 1
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "100m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+    persistence:
+      size: 50Gi
+      storageClassName: standard
+
+  # OpenTelemetry Collector — trace/metric aggregation
+  otel:
+    enabled: true
+    image: docker.io/otel/opentelemetry-collector-contrib:latest
+    grpcPort: 4317
+    httpPort: 4318
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "25m"
+      limits:
+        memory: "128Mi"
+        cpu: "100m"
+
+  # pgBackRest — PostgreSQL backup to MinIO
+  pgbackrest:
+    enabled: true
+    image: docker.io/dimfeld/pgbackrest:latest
+    schedule: "0 2 * * *"
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "50m"
+      limits:
+        memory: "256Mi"
+        cpu: "200m"
+
+  # Restic — blob backup to MinIO
+  restic:
+    enabled: true
+    image: docker.io/restic/restic:latest
+    schedule: "30 2 * * *"
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "50m"
+      limits:
+        memory: "256Mi"
+        cpu: "200m"

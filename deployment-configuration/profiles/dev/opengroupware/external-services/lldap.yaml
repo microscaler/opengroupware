@@ -1,0 +1,85 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lldap
+  namespace: opengroupware
+  labels:
+    app: lldap
+    app.kubernetes.io/component: directory
+    app.kubernetes.io/part-of: opengroupware
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: lldap
+  template:
+    metadata:
+      labels:
+        app: lldap
+    spec:
+      containers:
+        - name: lldap
+          image: docker.io/greenweb/lldap:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: ldap
+              containerPort: 389
+            - name: ldaps
+              containerPort: 636
+            - name: http
+              containerPort: 8080
+          env:
+            - name: LLDAP_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: lldap-secret-key
+                  key: secret-key
+            - name: LLDAP_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: lldap-secret-key
+                  key: jwt-secret
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          resources:
+            requests:
+              memory: "32Mi"
+              cpu: "25m"
+            limits:
+              memory: "64Mi"
+              cpu: "50m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lldap
+  namespace: opengroupware
+spec:
+  type: ClusterIP
+  ports:
+    - port: 389
+      targetPort: 389
+      name: ldap
+    - port: 636
+      targetPort: 636
+      name: ldaps
+    - port: 8080
+      targetPort: 8080
+      name: http
+  selector:
+    app: lldap

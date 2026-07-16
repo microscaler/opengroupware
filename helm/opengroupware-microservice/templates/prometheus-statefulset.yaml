@@ -1,0 +1,82 @@
+{{- if and .Values.external .Values.external.prometheus .Values.external.prometheus.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: prometheus
+  namespace: {{ .Values.deployment.namespace | default "opengroupware" }}
+  labels:
+    app: prometheus
+    app.kubernetes.io/component: observability
+    app.kubernetes.io/part-of: opengroupware
+    {{- include "opengroupware.labels" . | nindent 4 }}
+spec:
+  serviceName: prometheus-headless
+  replicas: {{ .Values.external.prometheus.replicas | default 1 }}
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+        {{- include "opengroupware.labels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: prometheus
+          image: {{ .Values.external.prometheus.image | default "docker.io/prom/prometheus:latest" }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: {{ .Values.external.prometheus.port | default 9090 }}
+              protocol: TCP
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+            - --storage.tsdb.retention.time={{ .Values.external.prometheus.retention | default "15d" }}
+            - --web.enable-lifecycle
+          resources:
+            requests:
+              memory: {{ .Values.external.prometheus.resources.requests.memory | default "512Mi" }}
+              cpu: {{ .Values.external.prometheus.resources.requests.cpu | default "200m" }}
+            limits:
+              memory: {{ .Values.external.prometheus.resources.limits.memory | default "2Gi" }}
+              cpu: {{ .Values.external.prometheus.resources.limits.cpu | default "1000m" }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+            - name: data
+              mountPath: /prometheus
+      volumes:
+        - name: config
+          configMap:
+            name: prometheus-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: prometheus-data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: {{ .Values.external.prometheus.persistence.storageClassName | default "standard" | quote }}
+        resources:
+          requests:
+            storage: {{ .Values.external.prometheus.persistence.size | default "50Gi" }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: {{ .Values.deployment.namespace | default "opengroupware" }}
+  labels:
+    app: prometheus
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.external.prometheus.port | default 9090 }}
+      targetPort: {{ .Values.external.prometheus.port | default 9090 }}
+      protocol: TCP
+      name: http
+  selector:
+    app: prometheus
+{{- end }}

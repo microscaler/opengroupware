@@ -1,0 +1,44 @@
+{{- if and .Values.external .Values.external.pgbackrest .Values.external.pgbackrest.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: pgbackrest
+  namespace: {{ .Values.deployment.namespace | default "opengroupware" }}
+  labels:
+    app: pgbackrest
+    app.kubernetes.io/component: backup
+    app.kubernetes.io/part-of: opengroupware
+    {{- include "opengroupware.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.external.pgbackrest.schedule | default "0 2 * * *" }}
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: pgbackrest
+              image: {{ .Values.external.pgbackrest.image | default "docker.io/dimfeld/pgbackrest:latest" }}
+              env:
+                - name: PGBACKREST_REPO1_S3_BUCKET
+                  valueFrom:
+                    secretKeyRef:
+                      name: minio-credentials
+                      key: bucket
+                - name: PGBACKREST_REPO1_S3_ENDPOINT
+                  valueFrom:
+                    secretKeyRef:
+                      name: minio-credentials
+                      key: endpoint
+                - name: PGBACKREST_REPO1_S3_REGION
+                  value: opengroupware
+              resources:
+                requests:
+                  memory: {{ .Values.external.pgbackrest.resources.requests.memory | default "128Mi" }}
+                  cpu: {{ .Values.external.pgbackrest.resources.requests.cpu | default "50m" }}
+                limits:
+                  memory: {{ .Values.external.pgbackrest.resources.limits.memory | default "256Mi" }}
+                  cpu: {{ .Values.external.pgbackrest.resources.limits.cpu | default "200m" }}
+          serviceAccountName: pgbackrest
+{{- end }}

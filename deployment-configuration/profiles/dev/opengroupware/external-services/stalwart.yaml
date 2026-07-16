@@ -1,0 +1,111 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stalwart-mail
+  namespace: opengroupware
+  labels:
+    app: stalwart-mail
+    app.kubernetes.io/component: mailbox
+    app.kubernetes.io/part-of: opengroupware
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: stalwart-mail
+  template:
+    metadata:
+      labels:
+        app: stalwart-mail
+    spec:
+      containers:
+        - name: stalwart-mail
+          image: ghcr.io/stalwart-mail/stalwart-mail:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: imap
+              containerPort: 143
+            - name: smtp
+              containerPort: 25
+            - name: jmap
+              containerPort: 8081
+          env:
+            - name: STALWART_DB_HOST
+              value: postgresql
+            - name: STALWART_DB_PORT
+              value: "5432"
+            - name: STALWART_DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-credentials
+                  key: username
+            - name: STALWART_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-credentials
+                  key: password
+            - name: STALWART_STORAGE_BACKEND
+              value: s3
+            - name: STALWART_STORAGE_ENDPOINT
+              value: minio:9000
+            - name: STALWART_STORAGE_BUCKET
+              value: opengroupware
+            - name: STALWART_REDIS_HOST
+              value: redis
+            - name: STALWART_REDIS_PORT
+              value: "6379"
+            - name: STALWART_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: stalwart-admin-credentials
+                  key: password
+          livenessProbe:
+            httpGet:
+              path: /admin
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /admin
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "200m"
+            limits:
+              memory: "2Gi"
+              cpu: "1000m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: stalwart-mail
+  namespace: opengroupware
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: 8080
+      name: http
+    - port: 143
+      targetPort: 143
+      name: imap
+    - port: 25
+      targetPort: 25
+      name: smtp
+    - port: 8081
+      targetPort: 8081
+      name: jmap
+  selector:
+    app: stalwart-mail

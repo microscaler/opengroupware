@@ -1,0 +1,112 @@
+{{- if and .Values.external .Values.external.lldap .Values.external.lldap.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lldap
+  namespace: {{ .Values.deployment.namespace | default "opengroupware" }}
+  labels:
+    app: lldap
+    app.kubernetes.io/component: directory
+    app.kubernetes.io/part-of: opengroupware
+    {{- include "opengroupware.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.external.lldap.replicas | default 1 }}
+  selector:
+    matchLabels:
+      app: lldap
+  template:
+    metadata:
+      labels:
+        app: lldap
+        {{- include "opengroupware.labels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: lldap
+          image: {{ .Values.external.lldap.image | default "docker.io/greenweb/lldap:latest" }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: ldap
+              containerPort: {{ .Values.external.lldap.ldapPort | default 389 }}
+              protocol: TCP
+            - name: ldaps
+              containerPort: {{ .Values.external.lldap.httpsPort | default 636 }}
+              protocol: TCP
+            - name: http
+              containerPort: {{ .Values.external.lldap.httpPort | default 8080 }}
+              protocol: TCP
+          env:
+            - name: LLDAP_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: lldap-secret-key
+                  key: secret-key
+            - name: LLDAP_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: lldap-secret-key
+                  key: jwt-secret
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          resources:
+            requests:
+              memory: {{ .Values.external.lldap.resources.requests.memory | default "32Mi" }}
+              cpu: {{ .Values.external.lldap.resources.requests.cpu | default "25m" }}
+            limits:
+              memory: {{ .Values.external.lldap.resources.limits.memory | default "64Mi" }}
+              cpu: {{ .Values.external.lldap.resources.limits.cpu | default "50m" }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: lldap-data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: {{ .Values.external.lldap.persistence.storageClassName | default "standard" | quote }}
+        resources:
+          requests:
+            storage: {{ .Values.external.lldap.persistence.size | default "5Gi" }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lldap
+  namespace: {{ .Values.deployment.namespace | default "opengroupware" }}
+  labels:
+    app: lldap
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.external.lldap.ldapPort | default 389 }}
+      targetPort: {{ .Values.external.lldap.ldapPort | default 389 }}
+      protocol: TCP
+      name: ldap
+    - port: {{ .Values.external.lldap.httpsPort | default 636 }}
+      targetPort: {{ .Values.external.lldap.httpsPort | default 636 }}
+      protocol: TCP
+      name: ldaps
+    - port: {{ .Values.external.lldap.httpPort | default 8080 }}
+      targetPort: {{ .Values.external.lldap.httpPort | default 8080 }}
+      protocol: TCP
+      name: http
+  selector:
+    app: lldap
+{{- end }}

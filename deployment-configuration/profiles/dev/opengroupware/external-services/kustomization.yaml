@@ -2,7 +2,30 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-  - ../helm/stalwart-mail.yaml
-  - ../helm/rspamd.yaml
-  - ../helm/minio.yaml
-  - ../helm/search.yaml
+  # Data layer (deploy first)
+  - postgresql.yaml
+  - redis.yaml
+  - pgbouncer.yaml
+  - minio.yaml
+
+  # Mail stack
+  - stalwart.yaml
+  - rspamd.yaml
+  - clamav.yaml
+
+  # Identity
+  - authentik.yaml
+  - lldap.yaml
+
+  # Search
+  - search.yaml
+
+  # Observability
+  - prometheus.yaml
+  - grafana.yaml
+  - loki.yaml
+  - otel.yaml
+
+  # Backup
+  - pgbackrest.yaml
+  - restic.yaml

@@ -1,0 +1,42 @@
+{{- if and .Values.external .Values.external.restic .Values.external.restic.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: restic
+  namespace: {{ .Values.deployment.namespace | default "opengroupware" }}
+  labels:
+    app: restic
+    app.kubernetes.io/component: backup
+    app.kubernetes.io/part-of: opengroupware
+    {{- include "opengroupware.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.external.restic.schedule | default "30 2 * * *" }}
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: restic
+              image: {{ .Values.external.restic.image | default "docker.io/restic/restic:latest" }}
+              env:
+                - name: RESTIC_REPOSITORY
+                  valueFrom:
+                    secretKeyRef:
+                      name: restic-repository
+                      key: repository
+                - name: RESTIC_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: restic-repository
+                      key: password
+              resources:
+                requests:
+                  memory: {{ .Values.external.restic.resources.requests.memory | default "128Mi" }}
+                  cpu: {{ .Values.external.restic.resources.requests.cpu | default "50m" }}
+                limits:
+                  memory: {{ .Values.external.restic.resources.limits.memory | default "256Mi" }}
+                  cpu: {{ .Values.external.restic.resources.limits.cpu | default "200m" }}
+          serviceAccountName: restic
+{{- end }}

@@ -1,0 +1,101 @@
+{{- if and .Values.external .Values.external.postgresql .Values.external.postgresql.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgresql
+  namespace: {{ .Values.deployment.namespace | default "opengroupware" }}
+  labels:
+    app: postgresql
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: opengroupware
+    {{- include "opengroupware.labels" . | nindent 4 }}
+spec:
+  {{- if .Values.external.postgresql.replicas }}
+  serviceName: postgresql-headless
+  replicas: {{ .Values.external.postgresql.replicas }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app: postgresql
+  template:
+    metadata:
+      labels:
+        app: postgresql
+        {{- include "opengroupware.labels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: postgresql
+          image: {{ .Values.external.postgresql.image | default "docker.io/postgres:16-alpine" }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: postgresql
+              containerPort: {{ .Values.external.postgresql.port | default 5432 }}
+              protocol: TCP
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-credentials
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-credentials
+                  key: password
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-credentials
+                  key: database
+          {{- if .Values.external.postgresql.params }}
+          command:
+            - postgres
+            - -c
+            - shared_preload_libraries={{ .Values.external.postgresql.params.shared_preload_libraries | default "pg_stat_statements" }}
+            - -c
+            - max_connections={{ .Values.external.postgresql.params.max_connections | default 200 }}
+          {{- end }}
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - {{ .Values.external.postgresql.credentials.username | default "opengroupware" }}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - {{ .Values.external.postgresql.credentials.username | default "opengroupware" }}
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          resources:
+            requests:
+              memory: {{ .Values.external.postgresql.resources.requests.memory | default "1Gi" }}
+              cpu: {{ .Values.external.postgresql.resources.requests.cpu | default "500m" }}
+            limits:
+              memory: {{ .Values.external.postgresql.resources.limits.memory | default "4Gi" }}
+              cpu: {{ .Values.external.postgresql.resources.limits.cpu | default "2000m" }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: postgresql-data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: {{ .Values.external.postgresql.persistence.storageClassName | default "standard" | quote }}
+        resources:
+          requests:
+            storage: {{ .Values.external.postgresql.persistence.size | default "50Gi" }}
+{{- end }}

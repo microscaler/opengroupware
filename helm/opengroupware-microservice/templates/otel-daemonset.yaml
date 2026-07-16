@@ -1,0 +1,61 @@
+{{- if and .Values.external .Values.external.otel .Values.external.otel.enabled }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: otel-collector
+  namespace: {{ .Values.deployment.namespace | default "opengroupware" }}
+  labels:
+    app: otel-collector
+    app.kubernetes.io/component: observability
+    app.kubernetes.io/part-of: opengroupware
+    {{- include "opengroupware.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+        {{- include "opengroupware.labels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: otel-collector
+          image: {{ .Values.external.otel.image | default "docker.io/otel/opentelemetry-collector-contrib:latest" }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: grpc
+              containerPort: {{ .Values.external.otel.grpcPort | default 4317 }}
+              protocol: TCP
+            - name: http
+              containerPort: {{ .Values.external.otel.httpPort | default 4318 }}
+              protocol: TCP
+          resources:
+            requests:
+              memory: {{ .Values.external.otel.resources.requests.memory | default "64Mi" }}
+              cpu: {{ .Values.external.otel.resources.requests.cpu | default "25m" }}
+            limits:
+              memory: {{ .Values.external.otel.resources.limits.memory | default "128Mi" }}
+              cpu: {{ .Values.external.otel.resources.limits.cpu | default "100m" }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: {{ .Values.deployment.namespace | default "opengroupware" }}
+  labels:
+    app: otel-collector
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.external.otel.grpcPort | default 4317 }}
+      targetPort: {{ .Values.external.otel.grpcPort | default 4317 }}
+      protocol: TCP
+      name: grpc
+    - port: {{ .Values.external.otel.httpPort | default 4318 }}
+      targetPort: {{ .Values.external.otel.httpPort | default 4318 }}
+      protocol: TCP
+      name: http
+  selector:
+    app: otel-collector
+{{- end }}

@@ -1,0 +1,73 @@
+{{- if and .Values.external .Values.external.redis .Values.external.redis.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  namespace: {{ .Values.deployment.namespace | default "opengroupware" }}
+  labels:
+    app: redis
+    app.kubernetes.io/component: cache
+    app.kubernetes.io/part-of: opengroupware
+    {{- include "opengroupware.labels" . | nindent 4 }}
+spec:
+  {{- if .Values.external.redis.replicas }}
+  serviceName: redis-headless
+  replicas: {{ .Values.external.redis.replicas }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+        {{- include "opengroupware.labels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: redis
+          image: {{ .Values.external.redis.image | default "docker.io/redis:7-alpine" }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: redis
+              containerPort: {{ .Values.external.redis.port | default 6379 }}
+              protocol: TCP
+          command:
+            - redis-server
+            - --requirepass
+            - $(REDIS_PASSWORD)
+            - --maxmemory
+            - {{ .Values.external.redis.maxmemory | default "256mb" }}
+            - --maxmemory-policy
+            - {{ .Values.external.redis.maxmemoryPolicy | default "allkeys-lru" }}
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-password
+                  key: password
+          livenessProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          resources:
+            requests:
+              memory: {{ .Values.external.redis.resources.requests.memory | default "256Mi" }}
+              cpu: {{ .Values.external.redis.resources.requests.cpu | default "100m" }}
+            limits:
+              memory: {{ .Values.external.redis.resources.limits.memory | default "512Mi" }}
+              cpu: {{ .Values.external.redis.resources.limits.cpu | default "500m" }}
+{{- end }}

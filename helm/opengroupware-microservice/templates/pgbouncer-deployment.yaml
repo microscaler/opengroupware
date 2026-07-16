@@ -1,0 +1,75 @@
+{{- if and .Values.external .Values.external.pgbouncer .Values.external.pgbouncer.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pgbouncer
+  namespace: {{ .Values.deployment.namespace | default "opengroupware" }}
+  labels:
+    app: pgbouncer
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: opengroupware
+    {{- include "opengroupware.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.external.pgbouncer.replicas | default 1 }}
+  selector:
+    matchLabels:
+      app: pgbouncer
+  template:
+    metadata:
+      labels:
+        app: pgbouncer
+        {{- include "opengroupware.labels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: pgbouncer
+          image: {{ .Values.external.pgbouncer.image | default "docker.io/deitch/pgbouncer:latest" }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: pgbouncer
+              containerPort: {{ .Values.external.pgbouncer.port | default 6432 }}
+              protocol: TCP
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-credentials
+                  key: host
+          livenessProbe:
+            tcpSocket:
+              port: pgbouncer
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: pgbouncer
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          resources:
+            requests:
+              memory: {{ .Values.external.pgbouncer.resources.requests.memory | default "32Mi" }}
+              cpu: {{ .Values.external.pgbouncer.resources.requests.cpu | default "25m" }}
+            limits:
+              memory: {{ .Values.external.pgbouncer.resources.limits.memory | default "64Mi" }}
+              cpu: {{ .Values.external.pgbouncer.resources.limits.cpu | default "50m" }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pgbouncer
+  namespace: {{ .Values.deployment.namespace | default "opengroupware" }}
+  labels:
+    app: pgbouncer
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.external.pgbouncer.port | default 6432 }}
+      targetPort: {{ .Values.external.pgbouncer.port | default 6432 }}
+      protocol: TCP
+      name: pgbouncer
+  selector:
+    app: pgbouncer
+{{- end }}

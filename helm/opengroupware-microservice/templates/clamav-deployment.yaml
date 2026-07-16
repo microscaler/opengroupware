@@ -1,0 +1,69 @@
+{{- if and .Values.external .Values.external.clamav .Values.external.clamav.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clamav
+  namespace: {{ .Values.deployment.namespace | default "opengroupware" }}
+  labels:
+    app: clamav
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: opengroupware
+    {{- include "opengroupware.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.external.clamav.replicas | default 1 }}
+  selector:
+    matchLabels:
+      app: clamav
+  template:
+    metadata:
+      labels:
+        app: clamav
+        {{- include "opengroupware.labels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: clamav
+          image: {{ .Values.external.clamav.image | default "docker.io/clamav/clamav:latest" }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: clamd
+              containerPort: {{ .Values.external.clamav.port | default 3310 }}
+              protocol: TCP
+          livenessProbe:
+            tcpSocket:
+              port: clamd
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: clamd
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          resources:
+            requests:
+              memory: {{ .Values.external.clamav.resources.requests.memory | default "128Mi" }}
+              cpu: {{ .Values.external.clamav.resources.requests.cpu | default "50m" }}
+            limits:
+              memory: {{ .Values.external.clamav.resources.limits.memory | default "256Mi" }}
+              cpu: {{ .Values.external.clamav.resources.limits.cpu | default "200m" }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: clamav
+  namespace: {{ .Values.deployment.namespace | default "opengroupware" }}
+  labels:
+    app: clamav
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.external.clamav.port | default 3310 }}
+      targetPort: {{ .Values.external.clamav.port | default 3310 }}
+      protocol: TCP
+      name: clamd
+  selector:
+    app: clamav
+{{- end }}
