@@ -13,4 +13,4 @@
 creation_rules:
   - path_regex: deployment-configuration/.*secrets.*\.ya?ml$
     encrypted_regex: ^(data|stringData)$
-    age: __AGE_PUBLIC_KEY__
+    age: age1glv57rmd9760gylmkn2w69urhp953nh5axd84sxyn6cpfw3d0caq6kzcyj
