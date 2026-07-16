@@ -123,10 +123,12 @@ external:
         memory: "256Mi"
         cpu: "200m"
 
-  # Stalwart — SMTP/IMAP/JMAP/CalDAV/CardDAV
+  # Stalwart — SMTP/IMAP/JMAP/CalDAV/CardDAV.
+  # ADR-0007: official image (ghcr.io/stalwart-mail was fictional), pinned
+  # to the version whose 0.16 bootstrap config schema is verified.
   stalwart:
     enabled: true
-    image: ghcr.io/stalwart-mail/stalwart-mail:latest
+    image: docker.io/stalwartlabs/stalwart:v0.16.13
     replicas: 1
     resources:
       requests:

@@ -1,80 +1,68 @@
-# Stalwart configuration (real config.toml — the previous STALWART_* env
-# vars were fictional; Stalwart reads its TOML config with %{env:...}%
-# macros).
+# Stalwart 0.16 configuration (see docs/adr/0007-stalwart-016-config-model.md).
 #
-# The [directory] section is the PRD-OPENGROUPWARE F3 consumer: protocol
-# auth (IMAP/SMTP/DAV) verifies argon2id PHC hashes through the sesame
-# rp_directory views, as the SELECT-only rp_stalwart role.
-#
-# Prereqs per environment:
-#   * rp_stalwart LOGIN role in the sesame DB, granted rp_directory_read
-#   * rp-stalwart-credentials secret in this namespace:
-#       sops edit deployment-configuration/.../runtime/secrets.yaml
-#       (add username/password keys) — never commit plaintext.
-#
-# NOTE(verify-on-deploy): query/column names below follow the Stalwart
-# 0.11 SQL-directory schema; validate against the deployed image version
-# on first rollout (config check: `stalwart --validate-config`).
+# TWO parts, because 0.16 splits bootstrap from settings:
+#   1. bootstrap store spec (Secret) — the ONLY thing --config reads; points
+#      Stalwart at its own PostgreSQL data store. Format verified live
+#      against stalwartlabs/stalwart:v0.16.13.
+#   2. settings ConfigMap (sesame SQL directory, listeners) — applied
+#      post-boot via the management API by the stalwart-configure Job, since
+#      0.16 keeps these in the data store, not in the --config file.
 ---
+# 1. Bootstrap data-store spec. No inline secret — the DB password is read
+# at runtime via Stalwart's %{env:...}% macro from STALWART_DB_PASSWORD
+# (injected from the postgresql-credentials secret in the Deployment), so
+# this stays a plain ConfigMap.
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: stalwart-config
+  name: stalwart-bootstrap
   namespace: opengroupware
   labels:
     app.kubernetes.io/component: mailbox
     app.kubernetes.io/part-of: opengroupware
 data:
-  config.toml: |
-    [server]
-    hostname = "mail.opengroupware.local"
-
-    [server.listener."smtp"]
-    bind = ["0.0.0.0:25"]
+  # Stalwart owns mail-plane state (ADR-0005) in its OWN database
+  # ("stalwart"), separate from the opengroupware control-plane DB.
+  config.json: |
+    {
+      "@type": "PostgreSql",
+      "host": "postgres-primary",
+      "port": 5432,
+      "database": "stalwart",
+      "authUsername": "stalwart",
+      "authSecret": { "@type": "Value", "value": "%{env:STALWART_DB_PASSWORD}%" }
+    }
+---
+# 2. Declarative settings applied by the configure Job via the management
+# API. The rp_directory query shape is validated by
+# scripts/rp-directory-smoke.sh. Keys use Stalwart's settings namespace.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stalwart-settings
+  namespace: opengroupware
+  labels:
+    app.kubernetes.io/component: mailbox
+    app.kubernetes.io/part-of: opengroupware
+data:
+  settings.toml: |
+    # Listeners
+    [server.listener.smtp]
+    bind = "[::]:25"
     protocol = "smtp"
-
-    [server.listener."submission"]
-    bind = ["0.0.0.0:587"]
+    [server.listener.submission]
+    bind = "[::]:587"
     protocol = "smtp"
-
-    [server.listener."imap"]
-    bind = ["0.0.0.0:143"]
+    [server.listener.imap]
+    bind = "[::]:143"
     protocol = "imap"
-
-    [server.listener."http"]
-    bind = ["0.0.0.0:8080"]
+    [server.listener.http]
+    bind = "[::]:8080"
     protocol = "http"
 
-    [authentication.fallback-admin]
-    user = "admin"
-    secret = "%{env:STALWART_ADMIN_PASSWORD}%"
-
-    # ── Mail-plane data (ADR-0005: Stalwart owns all of it) ─────────────
-    [store."data"]
-    type = "postgresql"
-    host = "postgresql"
-    port = 5432
-    database = "%{env:STALWART_DB_NAME}%"
-    user = "%{env:STALWART_DB_USER}%"
-    password = "%{env:STALWART_DB_PASSWORD}%"
-
-    [store."blob"]
-    type = "s3"
-    endpoint = "http://minio:9000"
-    bucket = "opengroupware"
-    access-key = "%{env:STALWART_S3_ACCESS_KEY}%"
-    secret-key = "%{env:STALWART_S3_SECRET_KEY}%"
-
-    [storage]
-    data = "data"
-    fts = "data"
-    blob = "blob"
-    lookup = "data"
-    directory = "sesame"
-
-    # ── Identity (ADR-0006 v2): sesame rp_directory bridge ──────────────
-    # Separate Postgres database (sesame's), SELECT-only role.
-    [store."sesame-directory"]
+    # Identity: sesame rp_directory bridge (ADR-0006 v2 / PRD F3).
+    # Separate Postgres (sesame's), SELECT-only rp_stalwart role.
+    [store.sesame-directory]
     type = "postgresql"
     host = "%{env:SESAME_DB_HOST}%"
     port = 5432
@@ -82,19 +70,73 @@ data:
     user = "%{env:RP_STALWART_USER}%"
     password = "%{env:RP_STALWART_PASSWORD}%"
 
-    [store."sesame-directory".query]
-    # Primary credential + app passwords: any returned PHC hash may match.
-    name = "SELECT login AS name, 'individual' AS type, secret_phc AS secret, display_name AS description, login AS email FROM rp_directory.users WHERE login = $1"
+    [store.sesame-directory.query]
+    name = "SELECT login AS name, 'individual' AS type, secret_phc AS secret, display_name AS description, 0 AS quota FROM rp_directory.users WHERE login = $1"
     secrets = "SELECT secret_phc FROM rp_directory.users WHERE login = $1 UNION ALL SELECT secret_phc FROM rp_directory.app_passwords WHERE login = $1"
     emails = "SELECT login AS email FROM rp_directory.users WHERE login = $1"
 
-    [directory."sesame"]
+    [directory.sesame]
     type = "sql"
     store = "sesame-directory"
 
-    [directory."sesame".columns]
+    [directory.sesame.columns]
     name = "name"
     type = "type"
     secret = "secret"
     description = "description"
-    email = "email"
+    quota = "quota"
+
+    [storage]
+    directory = "sesame"
+---
+# 3. Configure Job — applies the settings ConfigMap to Stalwart's store via
+# the management API once the server is ready (ADR-0007). Idempotent; re-run
+# on settings change. Uses the fallback-admin credential.
+#
+# NOTE: the exact management-API import call is the remaining live-cluster
+# task — the settings content and rp_directory query are proven; the POST
+# shape must be confirmed against v0.16.13's API on first deploy.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: stalwart-configure
+  namespace: opengroupware
+  labels:
+    app.kubernetes.io/component: mailbox
+    app.kubernetes.io/part-of: opengroupware
+  annotations:
+    # Re-apply whenever the settings change (Flux/kustomize hash could go here).
+    opengroupware.io/settings-revision: "1"
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: configure
+          image: curlimages/curl:8.11.0
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -e
+              until curl -sf "http://stalwart-mail:8080" >/dev/null 2>&1; do
+                echo "waiting for stalwart..."; sleep 3; done
+              echo "stalwart reachable; applying settings via management API"
+              # TODO(verify-on-deploy): confirm the v0.16.13 settings-import
+              # endpoint + payload. The settings live in /etc/settings.toml.
+              # Placeholder call kept explicit so the gap is visible in logs:
+              echo "settings to apply:"; cat /etc/settings/settings.toml
+              echo "MANUAL STEP: import via management API (ADR-0007)"
+          env:
+            - name: STALWART_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: stalwart-admin-credentials
+                  key: password
+          volumeMounts:
+            - name: settings
+              mountPath: /etc/settings
+      volumes:
+        - name: settings
+          configMap:
+            name: stalwart-settings

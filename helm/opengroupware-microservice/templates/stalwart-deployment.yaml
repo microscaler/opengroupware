@@ -26,7 +26,7 @@ spec:
     spec:
       containers:
         - name: stalwart-mail
-          image: {{ .Values.external.stalwart.image | default "ghcr.io/stalwart-mail/stalwart-mail:latest" }}
+          image: {{ .Values.external.stalwart.image | default "docker.io/stalwartlabs/stalwart:v0.16.13" }}
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
