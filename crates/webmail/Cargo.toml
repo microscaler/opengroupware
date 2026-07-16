@@ -1,6 +1,40 @@
 [package]
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
 name = "webmail"
-version = "0.1.0"
-edition = "2021"
-rust-version = "1.85"
+description = "Leptos-based webmail frontend"
 license = "AGPL-3.0-or-later"
+
+[[bin]]
+name = "webmail"
+path = "src/main.rs"
+
+[dependencies]
+# Leptos — SSR + CSR + hydration
+leptos = { workspace = true }
+leptos_router = { workspace = true }
+leptos_axum = { workspace = true }
+wasm-bindgen = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
+wasm-logger = { workspace = true }
+js-sys = { workspace = true }
+web-sys = { workspace = true }
+
+# Internal
+types = { workspace = true }
+wrappers = { path = "../wrappers" }
+config-schema = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+
+# HTTP server
+axum = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+
+
