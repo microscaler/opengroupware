@@ -1,0 +1,17 @@
+[package]
+name = "service-kit"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Shared service bootstrap: axum server, /health, /metrics, tracing, graceful shutdown"
+license = "AGPL-3.0-or-later"
+
+[dependencies]
+axum = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

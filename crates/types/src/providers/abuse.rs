@@ -67,11 +67,46 @@ pub enum ThreatSeverity {
 
 #[async_trait::async_trait]
 pub trait AbuseProvider: Send + Sync {
-    async fn score_message(&self, ctx: &ProviderContext, raw_message: &[u8]) -> Result<ScoringResult, ProviderError>;
-    async fn check_threat_intel(&self, ctx: &ProviderContext, indicator_type: ThreatIndicatorType, indicator_value: &str) -> Result<Option<ThreatIntelObservation>, ProviderError>;
-    async fn train_bayes(&self, ctx: &ProviderContext, message_id: Uuid, is_spam: bool) -> Result<(), ProviderError>;
-    async fn quarantine_message(&self, ctx: &ProviderContext, message_id: Uuid, reason: &str, scoring_result: &ScoringResult) -> Result<Uuid, ProviderError>;
-    async fn release_quarantine(&self, ctx: &ProviderContext, quarantine_id: Uuid, account_id: Uuid) -> Result<(), ProviderError>;
-    async fn delete_quarantine(&self, ctx: &ProviderContext, quarantine_id: Uuid) -> Result<(), ProviderError>;
-    async fn list_quarantine(&self, ctx: &ProviderContext, account_id: Uuid, cursor: Option<String>, limit: u32) -> Result<Page<QuarantineItem>, ProviderError>;
+    async fn score_message(
+        &self,
+        ctx: &ProviderContext,
+        raw_message: &[u8],
+    ) -> Result<ScoringResult, ProviderError>;
+    async fn check_threat_intel(
+        &self,
+        ctx: &ProviderContext,
+        indicator_type: ThreatIndicatorType,
+        indicator_value: &str,
+    ) -> Result<Option<ThreatIntelObservation>, ProviderError>;
+    async fn train_bayes(
+        &self,
+        ctx: &ProviderContext,
+        message_id: Uuid,
+        is_spam: bool,
+    ) -> Result<(), ProviderError>;
+    async fn quarantine_message(
+        &self,
+        ctx: &ProviderContext,
+        message_id: Uuid,
+        reason: &str,
+        scoring_result: &ScoringResult,
+    ) -> Result<Uuid, ProviderError>;
+    async fn release_quarantine(
+        &self,
+        ctx: &ProviderContext,
+        quarantine_id: Uuid,
+        account_id: Uuid,
+    ) -> Result<(), ProviderError>;
+    async fn delete_quarantine(
+        &self,
+        ctx: &ProviderContext,
+        quarantine_id: Uuid,
+    ) -> Result<(), ProviderError>;
+    async fn list_quarantine(
+        &self,
+        ctx: &ProviderContext,
+        account_id: Uuid,
+        cursor: Option<String>,
+        limit: u32,
+    ) -> Result<Page<QuarantineItem>, ProviderError>;
 }

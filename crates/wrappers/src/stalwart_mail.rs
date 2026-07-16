@@ -1,13 +1,12 @@
 // Stalwart mail provider — concrete implementation of MailProvider.
 
-use async_trait::async_trait;
 use chrono::Utc;
 use types::providers::MailProvider;
+use types::providers::{Attachment, CalendarEvent, Contact, SieveScript};
 use types::{
     Account, ListResponse, Mailbox, Message, MessageFlags, Page, ProviderContext, ProviderError,
     RawMessage, Resource, SearchResult, Uuid,
 };
-use types::providers::{Attachment, CalendarEvent, Contact, SieveScript};
 
 use crate::stalwart::StalwartClient;
 
@@ -17,7 +16,8 @@ pub struct StalwartMailProvider {
 }
 
 impl StalwartMailProvider {
-    pub fn new(api_url: String, admin_api_key: String) -> Self {
+    #[must_use]
+    pub const fn new(api_url: String, admin_api_key: String) -> Self {
         Self {
             client: StalwartClient::new(api_url, admin_api_key),
         }
@@ -71,7 +71,9 @@ impl MailProvider for StalwartMailProvider {
         name: &str,
         parent_path: Option<&str>,
     ) -> Result<Uuid, ProviderError> {
-        self.client.mailbox_create(ctx, account_id, name, parent_path).await
+        self.client
+            .mailbox_create(ctx, account_id, name, parent_path)
+            .await
     }
 
     async fn delete_mailbox(
@@ -115,7 +117,9 @@ impl MailProvider for StalwartMailProvider {
         message_id: Uuid,
         flags: MessageFlags,
     ) -> Result<(), ProviderError> {
-        self.client.message_update_flags(ctx, account_id, message_id, flags).await
+        self.client
+            .message_update_flags(ctx, account_id, message_id, flags)
+            .await
     }
 
     async fn delete_message(
@@ -124,7 +128,9 @@ impl MailProvider for StalwartMailProvider {
         account_id: Uuid,
         message_id: Uuid,
     ) -> Result<(), ProviderError> {
-        self.client.message_delete(ctx, account_id, message_id).await
+        self.client
+            .message_delete(ctx, account_id, message_id)
+            .await
     }
 
     async fn search_messages(
@@ -138,16 +144,9 @@ impl MailProvider for StalwartMailProvider {
         date_to: Option<chrono::DateTime<Utc>>,
         limit: u32,
     ) -> Result<Page<SearchResult>, ProviderError> {
-        self.client.message_search(
-            ctx,
-            query,
-            from,
-            to,
-            subject,
-            date_from,
-            date_to,
-            limit,
-        ).await
+        self.client
+            .message_search(ctx, query, from, to, subject, date_from, date_to, limit)
+            .await
     }
 
     async fn list_attachments(
@@ -224,7 +223,9 @@ impl MailProvider for StalwartMailProvider {
         start: chrono::DateTime<Utc>,
         end: chrono::DateTime<Utc>,
     ) -> Result<Uuid, ProviderError> {
-        self.client.resource_book(ctx, resource_id, event_id, start, end).await
+        self.client
+            .resource_book(ctx, resource_id, event_id, start, end)
+            .await
     }
 
     async fn cancel_booking(

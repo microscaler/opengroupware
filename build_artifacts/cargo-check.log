@@ -1,0 +1,114 @@
+    Blocking waiting for file lock on build directory
+    Checking types v0.1.0 (/home/casibbald/Workspace/microscaler/opengroupware/crates/types)
+    Checking service-kit v0.1.0 (/home/casibbald/Workspace/microscaler/opengroupware/crates/service-kit)
+    Checking config-schema v0.1.0 (/home/casibbald/Workspace/microscaler/opengroupware/crates/config-schema)
+    Checking wrappers v0.1.0 (/home/casibbald/Workspace/microscaler/opengroupware/crates/wrappers)
+    Checking job-runner v0.1.0 (/home/casibbald/Workspace/microscaler/opengroupware/crates/job-runner)
+    Checking admin-api v0.1.0 (/home/casibbald/Workspace/microscaler/opengroupware/crates/admin-api)
+    Checking abuse-api v0.1.0 (/home/casibbald/Workspace/microscaler/opengroupware/crates/abuse-api)
+    Checking config-compiler v0.1.0 (/home/casibbald/Workspace/microscaler/opengroupware/crates/config-compiler)
+warning: fields `access_key`, `secret_key`, and `use_ssl` are never read
+  --> crates/wrappers/src/minio_storage.rs:9:5
+   |
+ 6 | pub struct MinioStorageProvider {
+   |            -------------------- fields in this struct
+...
+ 9 |     access_key: String,
+   |     ^^^^^^^^^^
+10 |     secret_key: String,
+   |     ^^^^^^^^^^
+11 |     use_ssl: bool,
+   |     ^^^^^^^
+   |
+   = note: requested on the command line with `-W dead-code`
+
+warning: field `config` is never read
+  --> crates/wrappers/src/rspamd_abuse.rs:19:5
+   |
+18 | pub struct RspamdAbuseProvider {
+   |            ------------------- field in this struct
+19 |     config: RspamdConfig,
+   |     ^^^^^^
+
+warning: fields `api_url` and `admin_api_key` are never read
+  --> crates/wrappers/src/stalwart.rs:13:5
+   |
+12 | pub struct StalwartClient {
+   |            -------------- fields in this struct
+13 |     api_url: String,
+   |     ^^^^^^^
+14 |     admin_api_key: String,
+   |     ^^^^^^^^^^^^^
+   |
+   = note: `StalwartClient` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: method `tenant_path` is never used
+  --> crates/wrappers/src/stalwart.rs:26:8
+   |
+17 | impl StalwartClient {
+   | ------------------- method in this implementation
+...
+26 |     fn tenant_path(&self, tenant_id: Uuid) -> String {
+   |        ^^^^^^^^^^^
+
+warning: fields `client_url` and `admin_api_key` are never read
+  --> crates/wrappers/src/stalwart_backup.rs:9:5
+   |
+ 8 | pub struct StalwartBackupProvider {
+   |            ---------------------- fields in this struct
+ 9 |     client_url: String,
+   |     ^^^^^^^^^^
+10 |     admin_api_key: String,
+   |     ^^^^^^^^^^^^^
+
+warning: fields `client_url` and `admin_api_key` are never read
+  --> crates/wrappers/src/stalwart_identity.rs:9:5
+   |
+ 8 | pub struct StalwartIdentityProvider {
+   |            ------------------------ fields in this struct
+ 9 |     client_url: String,
+   |     ^^^^^^^^^^
+10 |     admin_api_key: String,
+   |     ^^^^^^^^^^^^^
+
+warning: field `config` is never read
+  --> crates/wrappers/src/tantivy_search.rs:16:5
+   |
+15 | pub struct TantivySearchProvider {
+   |            --------------------- field in this struct
+16 |     config: TantivyIndexConfig,
+   |     ^^^^^^
+
+warning: `wrappers` (lib) generated 7 warnings
+    Checking webmail v0.1.0 (/home/casibbald/Workspace/microscaler/opengroupware/crates/webmail)
+    Checking admin-console v0.1.0 (/home/casibbald/Workspace/microscaler/opengroupware/crates/admin-console)
+warning: `wrappers` (lib test) generated 7 warnings (7 duplicates)
+warning: function `fetch_tenants` is never used
+  --> crates/admin-console/src/app.rs:99:14
+   |
+99 | pub async fn fetch_tenants() -> Result<Vec<Tenant>, String> {
+   |              ^^^^^^^^^^^^^
+   |
+   = note: requested on the command line with `-W dead-code`
+
+warning: function `fetch_accounts` is never used
+  --> crates/webmail/src/app.rs:92:14
+   |
+92 | pub async fn fetch_accounts(tenant_id: Uuid) -> Result<Vec<Account>, String> {
+   |              ^^^^^^^^^^^^^^
+   |
+   = note: requested on the command line with `-W dead-code`
+
+warning: function `fetch_mailboxes` is never used
+  --> crates/webmail/src/app.rs:97:14
+   |
+97 | pub async fn fetch_mailboxes(tenant_id: Uuid, account_id: Uuid) -> Result<Vec<Mailbox>, String> {
+   |              ^^^^^^^^^^^^^^^
+
+warning: `webmail` (bin "webmail") generated 2 warnings
+warning: `admin-console` (bin "admin-console" test) generated 1 warning (1 duplicate)
+warning: `admin-console` (bin "admin-console") generated 1 warning
+warning: `webmail` (bin "webmail" test) generated 2 warnings (2 duplicates)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.89s
+warning: the following packages contain code that will be rejected by a future version of Rust: proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`

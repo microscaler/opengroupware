@@ -21,6 +21,23 @@ NC='\033[0m' # No Color
 ERRORS=0
 
 # ---------------------------------------------------------------------------
+# Plaintext Kubernetes Secrets guard
+# ---------------------------------------------------------------------------
+# Any staged file under deployment-configuration/ that contains a Kubernetes
+# Secret with stringData/data MUST be sops-encrypted (i.e. contain a `sops:`
+# metadata block). See .sops.yaml and scripts/secrets-bootstrap.sh.
+while IFS= read -r file; do
+    [ -f "$file" ] || continue
+    if grep -q "kind: Secret" "$file" && grep -qE "^(stringData|data):" "$file"; then
+        if ! grep -q "^sops:" "$file"; then
+            echo -e "${RED}ERROR:${NC} Unencrypted Kubernetes Secret staged: $file"
+            echo "       Run scripts/secrets-bootstrap.sh (sops+age) before committing."
+            ERRORS=$((ERRORS + 1))
+        fi
+    fi
+done < <(git diff --cached --name-only --diff-filter=ACM 2>/dev/null | grep "^deployment-configuration/" || true)
+
+# ---------------------------------------------------------------------------
 # Max function length (60 lines)
 # ---------------------------------------------------------------------------
 count_lines_between() {
@@ -61,7 +78,7 @@ while IFS= read -r -d '' file; do
         fi
     done < <(grep -n "^pub fn\|^fn\|^impl.*{" "$file" 2>/dev/null || true)
 
-done < <(find packages services web -name "*.rs" -type f -print0 2>/dev/null || true)
+done < <(find crates -name "*.rs" -type f -print0 2>/dev/null || true)
 
 # ---------------------------------------------------------------------------
 # Max struct fields (8 fields)
@@ -78,7 +95,7 @@ while IFS= read -r -d '' file; do
         fi
     done < <(grep -n "^pub struct\|^struct" "$file" 2>/dev/null || true)
 
-done < <(find packages services web -name "*.rs" -type f -print0 2>/dev/null || true)
+done < <(find crates -name "*.rs" -type f -print0 2>/dev/null || true)
 
 # ---------------------------------------------------------------------------
 # Report

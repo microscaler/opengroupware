@@ -90,7 +90,7 @@ metadata:
     app: job-runner
   annotations:
     prometheus.io/scrape: "true"
-    prometheus.io/port: "8080"
+    prometheus.io/port: "8082"
     prometheus.io/path: "/metrics"
 spec:
   type: ClusterIP

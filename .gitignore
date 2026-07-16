@@ -11,5 +11,19 @@
 *~
 .DS_Store
 
-# Cargo
-Cargo.lock
+# NOTE: Cargo.lock is intentionally NOT ignored. This workspace builds
+# binaries (services), so the lockfile must be committed for reproducible
+# builds. (It was previously ignored while also being tracked — resolved
+# in favour of tracking.)
+
+# macOS / NFS artifacts
+._*
+.nfs*
+
+# Secret material — never commit
+*.agekey
+*.age
+age.key
+keys.txt
+*.dec.yaml
+*.plain.yaml

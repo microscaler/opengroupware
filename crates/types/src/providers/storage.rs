@@ -23,11 +23,7 @@ pub trait StorageProvider: Send + Sync {
     ) -> Result<Vec<u8>, ProviderError>;
 
     /// Delete a blob by key.
-    async fn delete(
-        &self,
-        ctx: &ProviderContext,
-        blob_key: &str,
-    ) -> Result<(), ProviderError>;
+    async fn delete(&self, ctx: &ProviderContext, blob_key: &str) -> Result<(), ProviderError>;
 
     /// List blobs for a tenant (with optional prefix and pagination).
     async fn list(

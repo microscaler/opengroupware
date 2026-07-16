@@ -1,8 +1,8 @@
 // Domain types shared across all crates.
 
-pub use uuid::Uuid;
 pub use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+pub use uuid::Uuid;
 
 // ---------------------------------------------------------------------------
 // Provider traits (re-exported for downstream crates)
@@ -12,7 +12,7 @@ pub mod providers;
 
 // Re-export provider-side domain types at crate root for convenience.
 pub use providers::{
-    Attachment, AppPassword, BackupJob, BookingStatus, CalendarEvent, Contact, DmarcResult,
+    AppPassword, Attachment, BackupJob, BookingStatus, CalendarEvent, Contact, DmarcResult,
     ExportFormat, ScoringAction, ScoringResult, SearchProvider, SessionInfo, SieveScript,
     ThreatIndicatorType, ThreatIntelObservation, ThreatSeverity, TokenInfo,
 };
@@ -73,8 +73,8 @@ pub struct Mailbox {
     pub id: Uuid,
     pub account_id: Uuid,
     pub tenant_id: Uuid,
-    pub name: String,          // folder name, e.g. "Inbox", "Sent"
-    pub path: String,          // full IMAP path, e.g. "Inbox", "Archive/2024"
+    pub name: String, // folder name, e.g. "Inbox", "Sent"
+    pub path: String, // full IMAP path, e.g. "Inbox", "Archive/2024"
     pub flags: MailboxFlags,
     pub created_at: DateTime<Utc>,
 }
@@ -98,7 +98,7 @@ pub struct Message {
     pub id: Uuid,
     pub mailbox_id: Uuid,
     pub tenant_id: Uuid,
-    pub uid: u32,              // IMAP UID within mailbox
+    pub uid: u32, // IMAP UID within mailbox
     pub from: Vec<String>,
     pub to: Vec<String>,
     pub subject: String,
@@ -194,14 +194,16 @@ pub struct ProviderContext {
 }
 
 impl ProviderContext {
-    pub fn new(tenant_id: Uuid) -> Self {
+    #[must_use]
+    pub const fn new(tenant_id: Uuid) -> Self {
         Self {
             tenant_id,
             account_id: None,
         }
     }
 
-    pub fn for_account(tenant_id: Uuid, account_id: Uuid) -> Self {
+    #[must_use]
+    pub const fn for_account(tenant_id: Uuid, account_id: Uuid) -> Self {
         Self {
             tenant_id,
             account_id: Some(account_id),

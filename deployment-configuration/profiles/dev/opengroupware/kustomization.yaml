@@ -5,6 +5,8 @@ namespace: opengroupware
 
 resources:
   - runtime
+  - external-services
   - bootstrap
   - services
+  - ingress
 

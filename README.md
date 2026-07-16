@@ -22,6 +22,9 @@ These docs are intentionally written as **Mermaid-first Markdown** so they can l
 | [`08-security-model.md`](./docs/08-security-model.md) | Authentication (OIDC, app passwords, OAuth2, mTLS), MFA policy, session management, API auth, TLS, secrets management, audit logging, incident response. |
 | [`09-kubernetes-deployment.md`](./docs/09-kubernetes-deployment.md) | K8s deployment architecture: three scaling phases (single-node → multi-node → multi-region), per-component sharding strategies, config compiler operator, HPA/VPA, node pools, backup/DR, monitoring. |
 | [`10-foss-component-audit.md`](./docs/10-foss-component-audit.md) | FOSS component evaluation for all 14 components — 8-criteria scoring (operational simplicity, protocol coverage, extensibility, backup, search, groupware maturity, abuse integration, multi-tenancy). Track A vs Track B comparison. |
+| [`11-deployment-plan.md`](./docs/11-deployment-plan.md) | Build/deploy loop for the product services (helm + kustomize). |
+| [`12-external-services-deployment.md`](./docs/12-external-services-deployment.md) | Wrapped infrastructure deployment (Stalwart, Rspamd, PG, Redis, MinIO, observability). |
+| [`13-ownership-review.md`](./docs/13-ownership-review.md) | **Binding decision log.** Opinionated review of docs 01–12 + code; where it conflicts with other docs, doc 13 wins. Key decisions: control-plane-only DB (ADR-0005), sesame-idam identity (ADR-0006 v2), Track B removed, RLS fixes, scope cuts. |
 
 ## Architecture stance
 

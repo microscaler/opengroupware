@@ -1,0 +1,16 @@
+# SOPS creation rules.
+#
+# Any file matching these rules is encrypted with sops before commit.
+# Only `data`/`stringData` values are encrypted — metadata stays readable
+# so kustomize/Flux can still see names and namespaces in diffs.
+#
+# The age recipient below is REPLACED by scripts/secrets-bootstrap.sh with
+# the real dev-cluster public key. Run that script once per cluster.
+#
+# Decryption in-cluster: Flux kustomize-controller with an age key stored in
+# the `sops-age` secret (flux-system namespace). See
+# deployment-configuration/clusters/dev/opengroupware.yaml.
+creation_rules:
+  - path_regex: deployment-configuration/.*secrets.*\.ya?ml$
+    encrypted_regex: ^(data|stringData)$
+    age: __AGE_PUBLIC_KEY__

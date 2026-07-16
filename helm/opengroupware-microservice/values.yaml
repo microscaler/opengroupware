@@ -177,64 +177,11 @@ external:
       storageClassName: standard
       accessModes: ["ReadWriteOnce"]
 
-  # Search (OpenSearch) — full-text search
-  search:
-    enabled: true
-    image: docker.io/opensearchproject/opensearch:2.11
-    port: 9200
-    replicas: 1
-    healthPath: "/_cluster/health"
-    clusterInitialMasterNodes: "search-0"
-    discoverySeedHosts: "search-0.search-headless.opengroupware.svc.cluster.local"
-    resources:
-      requests:
-        memory: "512Mi"
-        cpu: "200m"
-      limits:
-        memory: "2Gi"
-        cpu: "1000m"
-    persistence:
-      enabled: true
-      size: 50Gi
-      storageClassName: standard
-      accessModes: ["ReadWriteOnce"]
-
-  # Authentik — OIDC identity provider
-  authentik:
-    enabled: true
-    image: ghcr.io/goauthentik/server:2024
-    httpPort: 9000
-    httpsPort: 9443
-    replicas: 1
-    resources:
-      requests:
-        memory: "512Mi"
-        cpu: "200m"
-      limits:
-        memory: "1Gi"
-        cpu: "500m"
-    persistence:
-      size: 10Gi
-      storageClassName: standard
-
-  # LLDAP — LDAP directory compatibility
-  lldap:
-    enabled: true
-    image: docker.io/greenweb/lldap:latest
-    ldapPort: 389
-    httpsPort: 636
-    httpPort: 8080
-    replicas: 1
-    resources:
-      requests:
-        memory: "32Mi"
-        cpu: "25m"
-      limits:
-        memory: "64Mi"
-        cpu: "50m"
-    persistence:
-      size: 5Gi
-      storageClassName: standard
+  # Search: removed (D5, docs/13-ownership-review.md) — Stalwart built-in
+  # FTS via JMAP. Revisit only for cross-mailbox eDiscovery.
+  #
+  # Identity: Authentik/LLDAP removed (ADR-0006 v2) — sesame-idam is the
+  # identity platform, deployed from its own repo's helm charts.
 
   # Prometheus — metrics collection
   prometheus:

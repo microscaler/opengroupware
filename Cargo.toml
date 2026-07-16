@@ -10,6 +10,7 @@ members = [
     "crates/job-runner",
     "crates/webmail",
     "crates/admin-console",
+    "crates/service-kit",
 ]
 
 [workspace.package]
@@ -136,16 +137,20 @@ nursery = { level = "warn", priority = -1 }
 
 # JSF enforcement (high priority)
 # Thresholds are in clippy.toml
+# NOTE: `clippy::stack_size` and `clippy::test_attr_in_test` are not real
+# clippy lints (previously listed here; rustc warns E0602). Removed.
 cognitive_complexity = { level = "warn", priority = 100 }
 too_many_arguments = { level = "warn", priority = 100 }
-stack_size = { level = "warn", priority = 100 }
 
 # No-panicking — forbid ALL panicking constructs in production code
 # unwrap_used, expect_used, panic!(), assert!(), unreachable!() all forbidden
 # The `#[cfg(test)]` allow is applied at the module level per crate.
-unwrap_used = "forbid"
-expect_used = "forbid"
-panic = "forbid"
+# `deny`, not `forbid`: forbid conflicts (E0453) with the #[allow] attrs
+# that macro expansions like #[tokio::main] legitimately carry. deny keeps
+# the same CI-failing rigor for our own code.
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
 
 # Pedantic exceptions
 module_inception = "allow"
@@ -179,7 +184,6 @@ string_add = "allow"
 string_lit_chars_any = "allow"
 struct_excessive_bools = "allow"
 struct_field_names = "allow"
-test_attr_in_test = "allow"
 transmute_ptr_to_ptr = "allow"
 unnecessary_self_imports = "allow"
 unneeded_field_pattern = "allow"

@@ -90,7 +90,7 @@ metadata:
     app: config-compiler
   annotations:
     prometheus.io/scrape: "true"
-    prometheus.io/port: "8080"
+    prometheus.io/port: "8083"
     prometheus.io/path: "/metrics"
 spec:
   type: ClusterIP

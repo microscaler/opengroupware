@@ -45,10 +45,7 @@ pub struct SessionInfo {
 #[async_trait::async_trait]
 pub trait IdentityProvider: Send + Sync {
     /// Authenticate with OIDC token. Returns user info + tenant context.
-    async fn authenticate_oidc(
-        &self,
-        access_token: &str,
-    ) -> Result<TokenInfo, ProviderError>;
+    async fn authenticate_oidc(&self, access_token: &str) -> Result<TokenInfo, ProviderError>;
 
     /// Authenticate with email + password (or app password).
     /// Returns session token + user info.

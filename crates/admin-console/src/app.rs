@@ -1,11 +1,10 @@
 // Admin console app — shared components, routes, and API helpers.
 
 use leptos::prelude::*;
-use leptos_router::components::*;
-use types::Uuid;
+use leptos_router::components::{Outlet, Router};
 
 // Re-export domain types for UI bindings.
-pub use types::{Tenant, TenantConfig, Account, TenantResourceQuota};
+pub use types::Tenant;
 
 // ---------------------------------------------------------------------------
 // App component

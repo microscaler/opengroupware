@@ -1,0 +1,41 @@
+# Flux entrypoint for the dev cluster.
+#
+# Prereq (once per cluster, run by scripts/secrets-bootstrap.sh):
+#   kubectl -n flux-system create secret generic sops-age \
+#     --from-file=age.agekey=<private key file>
+#
+# kustomize-controller decrypts sops-encrypted manifests transparently via
+# .spec.decryption below. The age private key never lives in git.
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: opengroupware
+  namespace: flux-system
+spec:
+  interval: 1m
+  # TODO(charles): confirm the canonical URL for this repo.
+  url: ssh://git@github.com/microscaler/opengroupware
+  ref:
+    branch: main
+  secretRef:
+    name: opengroupware-deploy-key
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: opengroupware-dev
+  namespace: flux-system
+spec:
+  interval: 5m
+  sourceRef:
+    kind: GitRepository
+    name: opengroupware
+  path: ./deployment-configuration/profiles/dev/opengroupware
+  prune: true
+  wait: true
+  timeout: 5m
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age

@@ -15,9 +15,15 @@ pub mod search;
 pub mod storage;
 
 // Re-export traits and types for convenient access from other crates.
-pub use abuse::{AbuseProvider, ScoringResult, ScoringAction, DmarcResult, ThreatIntelObservation, ThreatIndicatorType, ThreatSeverity};
-pub use backup::{BackupProvider, BackupJob, BackupStatus, ExportFormat};
-pub use identity::{IdentityProvider, TokenInfo, AppPassword, SessionInfo};
-pub use mail::{MailProvider, RawMessage, Attachment, CalendarEvent, Contact, Resource, ResourceBooking, SieveScript, BookingStatus};
+pub use abuse::{
+    AbuseProvider, DmarcResult, ScoringAction, ScoringResult, ThreatIndicatorType,
+    ThreatIntelObservation, ThreatSeverity,
+};
+pub use backup::{BackupJob, BackupProvider, BackupStatus, ExportFormat};
+pub use identity::{AppPassword, IdentityProvider, SessionInfo, TokenInfo};
+pub use mail::{
+    Attachment, BookingStatus, CalendarEvent, Contact, MailProvider, RawMessage, Resource,
+    ResourceBooking, SieveScript,
+};
 pub use search::SearchProvider;
 pub use storage::StorageProvider;

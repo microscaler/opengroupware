@@ -1,6 +1,20 @@
 [package]
 name = "job-runner"
-version = "0.1.0"
-edition = "2021"
-rust-version = "1.85"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
 license = "AGPL-3.0-or-later"
+
+[[bin]]
+name = "job-runner"
+path = "src/main.rs"
+
+[dependencies]
+service-kit = { path = "../service-kit" }
+types = { workspace = true }
+axum = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+
+[lints]
+workspace = true

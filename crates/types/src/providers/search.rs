@@ -36,9 +36,5 @@ pub trait SearchProvider: Send + Sync {
     ) -> Result<Page<SearchResult>, ProviderError>;
 
     /// Rebuild the search index for a mailbox (used after migration).
-    async fn rebuild(
-        &self,
-        ctx: &ProviderContext,
-        account_id: Uuid,
-    ) -> Result<(), ProviderError>;
+    async fn rebuild(&self, ctx: &ProviderContext, account_id: Uuid) -> Result<(), ProviderError>;
 }

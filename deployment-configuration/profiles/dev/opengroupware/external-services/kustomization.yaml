@@ -13,12 +13,9 @@ resources:
   - rspamd.yaml
   - clamav.yaml
 
-  # Identity
-  - authentik.yaml
-  - lldap.yaml
-
-  # Search
-  - search.yaml
+  # Identity: sesame-idam (in-house, ADR-0006 v2) is deployed from its own
+  # repo's helm charts, not from this profile. authentik.yaml / lldap.yaml
+  # removed per ADR-0006 v2. Search removed per D5 (Stalwart built-in FTS).
 
   # Observability
   - prometheus.yaml

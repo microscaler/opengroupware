@@ -11,15 +11,11 @@ name = "admin-console"
 path = "src/main.rs"
 
 [dependencies]
-# Leptos — SSR + CSR + hydration
-leptos = { workspace = true }
-leptos_router = { workspace = true }
+# Leptos — SSR only (no hydrate/wasm bin yet; see docs/13 §code verdict).
+# `ssr` feature is required for leptos_axum server APIs to resolve.
+leptos = { workspace = true, features = ["ssr"] }
+leptos_router = { workspace = true, features = ["ssr"] }
 leptos_axum = { workspace = true }
-wasm-bindgen = { workspace = true }
-wasm-bindgen-futures = { workspace = true }
-wasm-logger = { workspace = true }
-js-sys = { workspace = true }
-web-sys = { workspace = true }
 
 # Internal
 types = { workspace = true }
@@ -38,3 +34,6 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 
 
+
+[lints]
+workspace = true

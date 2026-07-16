@@ -1,13 +1,11 @@
 // Stalwart client — HTTP client for Stalwart Mail Server JMAP API.
 
 use chrono::Utc;
+use types::providers::{CalendarEvent, Contact, RawMessage, Resource};
 use types::{
-    Account, BlobRef, DateTime, ListResponse, Mailbox, Message, MessageFlags,
-    Page, ProviderContext, ProviderError, SearchResult, Uuid,
+    Account, ListResponse, Mailbox, Message, MessageFlags, Page, ProviderContext, ProviderError,
+    SearchResult, Uuid,
 };
-use types::providers::{Attachment, CalendarEvent, Contact, RawMessage, Resource, SieveScript};
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 /// Configuration for connecting to Stalwart JMAP API.
 #[derive(Debug, Clone)]
@@ -17,7 +15,8 @@ pub struct StalwartClient {
 }
 
 impl StalwartClient {
-    pub fn new(api_url: String, admin_api_key: String) -> Self {
+    #[must_use]
+    pub const fn new(api_url: String, admin_api_key: String) -> Self {
         Self {
             api_url,
             admin_api_key,
@@ -37,13 +36,13 @@ impl StalwartClient {
         Ok(())
     }
 
-    pub async fn tenant_suspend(&self, ctx: &ProviderContext) -> Result<(), ProviderError> {
+    pub async fn tenant_suspend(&self, _ctx: &ProviderContext) -> Result<(), ProviderError> {
         // TODO: PATCH /api/tenants/:id with status=suspended
         // Maps to: STALWART_TENANT_SUSPEND
         Ok(())
     }
 
-    pub async fn tenant_terminate(&self, ctx: &ProviderContext) -> Result<(), ProviderError> {
+    pub async fn tenant_terminate(&self, _ctx: &ProviderContext) -> Result<(), ProviderError> {
         // TODO: DELETE /api/tenants/:id
         // Maps to: STALWART_TENANT_TERMINATE
         Ok(())
@@ -53,7 +52,7 @@ impl StalwartClient {
 
     pub async fn account_create(
         &self,
-        ctx: &ProviderContext,
+        _ctx: &ProviderContext,
         email: &str,
         display_name: &str,
     ) -> Result<Uuid, ProviderError> {
@@ -65,7 +64,7 @@ impl StalwartClient {
 
     pub async fn account_delete(
         &self,
-        ctx: &ProviderContext,
+        _ctx: &ProviderContext,
         account_id: Uuid,
     ) -> Result<(), ProviderError> {
         // TODO: DELETE /api/accounts/:id
@@ -76,7 +75,7 @@ impl StalwartClient {
 
     pub async fn account_list(
         &self,
-        ctx: &ProviderContext,
+        _ctx: &ProviderContext,
         cursor: Option<String>,
         limit: u32,
     ) -> Result<ListResponse<Account>, ProviderError> {
@@ -90,7 +89,7 @@ impl StalwartClient {
 
     pub async fn mailbox_create(
         &self,
-        ctx: &ProviderContext,
+        _ctx: &ProviderContext,
         account_id: Uuid,
         name: &str,
         parent_path: Option<&str>,
@@ -103,7 +102,7 @@ impl StalwartClient {
 
     pub async fn mailbox_delete(
         &self,
-        ctx: &ProviderContext,
+        _ctx: &ProviderContext,
         account_id: Uuid,
         path: &str,
     ) -> Result<(), ProviderError> {
@@ -115,7 +114,7 @@ impl StalwartClient {
 
     pub async fn mailbox_list(
         &self,
-        ctx: &ProviderContext,
+        _ctx: &ProviderContext,
         account_id: Uuid,
     ) -> Result<Vec<Mailbox>, ProviderError> {
         // TODO: GET /api/mailboxes?account_id=:id
@@ -128,7 +127,7 @@ impl StalwartClient {
 
     pub async fn message_store(
         &self,
-        ctx: &ProviderContext,
+        _ctx: &ProviderContext,
         raw: RawMessage,
     ) -> Result<Uuid, ProviderError> {
         // TODO: POST /api/messages with raw message bytes
@@ -139,19 +138,21 @@ impl StalwartClient {
 
     pub async fn message_get(
         &self,
-        ctx: &ProviderContext,
+        _ctx: &ProviderContext,
         account_id: Uuid,
         message_id: Uuid,
     ) -> Result<Message, ProviderError> {
         // TODO: GET /api/messages/:account/:id
         // Maps to: STALWART_MESSAGE_GET
         let _ = (account_id, message_id);
-        todo!("Not implemented")
+        Err(ProviderError::Unavailable(
+            "not implemented: real client lands with MVP slice 1 (docs/13)".to_string(),
+        ))
     }
 
     pub async fn message_update_flags(
         &self,
-        ctx: &ProviderContext,
+        _ctx: &ProviderContext,
         account_id: Uuid,
         message_id: Uuid,
         flags: MessageFlags,
@@ -164,7 +165,7 @@ impl StalwartClient {
 
     pub async fn message_delete(
         &self,
-        ctx: &ProviderContext,
+        _ctx: &ProviderContext,
         account_id: Uuid,
         message_id: Uuid,
     ) -> Result<(), ProviderError> {
@@ -176,7 +177,7 @@ impl StalwartClient {
 
     pub async fn message_search(
         &self,
-        ctx: &ProviderContext,
+        _ctx: &ProviderContext,
         query: &str,
         from: Option<&str>,
         to: Option<&str>,
@@ -199,7 +200,7 @@ impl StalwartClient {
 
     pub async fn attachment_list(
         &self,
-        ctx: &ProviderContext,
+        _ctx: &ProviderContext,
         message_id: Uuid,
     ) -> Result<Vec<types::Attachment>, ProviderError> {
         // TODO: GET /api/messages/:id/attachments
@@ -210,20 +211,22 @@ impl StalwartClient {
 
     pub async fn attachment_get(
         &self,
-        ctx: &ProviderContext,
+        _ctx: &ProviderContext,
         blob_key: &str,
     ) -> Result<Vec<u8>, ProviderError> {
         // TODO: GET /api/blobs/:key
         // Maps to: STALWART_ATTACHMENT_GET
         let _ = blob_key;
-        todo!("Not implemented")
+        Err(ProviderError::Unavailable(
+            "not implemented: real client lands with MVP slice 1 (docs/13)".to_string(),
+        ))
     }
 
     // --- Calendar operations ---
 
     pub async fn event_create(
         &self,
-        ctx: &ProviderContext,
+        _ctx: &ProviderContext,
         event: CalendarEvent,
     ) -> Result<Uuid, ProviderError> {
         // TODO: POST /api/events with calendar data
@@ -234,18 +237,20 @@ impl StalwartClient {
 
     pub async fn event_get(
         &self,
-        ctx: &ProviderContext,
+        _ctx: &ProviderContext,
         event_id: Uuid,
     ) -> Result<CalendarEvent, ProviderError> {
         // TODO: GET /api/events/:id
         // Maps to: STALWART_EVENT_GET
         let _ = event_id;
-        todo!("Not implemented")
+        Err(ProviderError::Unavailable(
+            "not implemented: real client lands with MVP slice 1 (docs/13)".to_string(),
+        ))
     }
 
     pub async fn event_list(
         &self,
-        ctx: &ProviderContext,
+        _ctx: &ProviderContext,
         account_id: Uuid,
         start: chrono::DateTime<Utc>,
         end: chrono::DateTime<Utc>,
@@ -260,7 +265,7 @@ impl StalwartClient {
 
     pub async fn contact_create(
         &self,
-        ctx: &ProviderContext,
+        _ctx: &ProviderContext,
         contact: Contact,
     ) -> Result<Uuid, ProviderError> {
         // TODO: POST /api/contacts with contact data
@@ -271,7 +276,7 @@ impl StalwartClient {
 
     pub async fn contact_list(
         &self,
-        ctx: &ProviderContext,
+        _ctx: &ProviderContext,
         account_id: Uuid,
     ) -> Result<Vec<Contact>, ProviderError> {
         // TODO: GET /api/contacts?account=:id
@@ -284,7 +289,7 @@ impl StalwartClient {
 
     pub async fn resource_create(
         &self,
-        ctx: &ProviderContext,
+        _ctx: &ProviderContext,
         resource: Resource,
     ) -> Result<Uuid, ProviderError> {
         // TODO: POST /api/resources with resource data
@@ -295,7 +300,7 @@ impl StalwartClient {
 
     pub async fn resource_book(
         &self,
-        ctx: &ProviderContext,
+        _ctx: &ProviderContext,
         resource_id: Uuid,
         event_id: Uuid,
         start: chrono::DateTime<Utc>,
@@ -309,7 +314,7 @@ impl StalwartClient {
 
     pub async fn booking_cancel(
         &self,
-        ctx: &ProviderContext,
+        _ctx: &ProviderContext,
         booking_id: Uuid,
     ) -> Result<(), ProviderError> {
         // TODO: DELETE /api/bookings/:id
@@ -322,7 +327,7 @@ impl StalwartClient {
 
     pub async fn sieve_install(
         &self,
-        ctx: &ProviderContext,
+        _ctx: &ProviderContext,
         script: types::SieveScript,
     ) -> Result<(), ProviderError> {
         // TODO: POST /api/sieve with script data
@@ -333,7 +338,7 @@ impl StalwartClient {
 
     pub async fn sieve_list(
         &self,
-        ctx: &ProviderContext,
+        _ctx: &ProviderContext,
         mailbox_id: Uuid,
     ) -> Result<Vec<types::SieveScript>, ProviderError> {
         // TODO: GET /api/sieve?mailbox=:id

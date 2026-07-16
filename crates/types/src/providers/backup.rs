@@ -40,11 +40,8 @@ pub trait BackupProvider: Send + Sync {
     ) -> Result<Uuid, ProviderError>;
 
     /// Cancel an in-progress backup.
-    async fn cancel_backup(
-        &self,
-        ctx: &ProviderContext,
-        job_id: Uuid,
-    ) -> Result<(), ProviderError>;
+    async fn cancel_backup(&self, ctx: &ProviderContext, job_id: Uuid)
+        -> Result<(), ProviderError>;
 
     /// Get backup job status.
     async fn get_backup_status(
@@ -62,10 +59,7 @@ pub trait BackupProvider: Send + Sync {
     ) -> Result<Uuid, ProviderError>;
 
     /// List backups for a tenant.
-    async fn list_backups(
-        &self,
-        ctx: &ProviderContext,
-    ) -> Result<Vec<BackupJob>, ProviderError>;
+    async fn list_backups(&self, ctx: &ProviderContext) -> Result<Vec<BackupJob>, ProviderError>;
 
     /// Export a mailbox to PST/MBOX format.
     async fn export_mailbox(

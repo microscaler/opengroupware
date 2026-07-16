@@ -6,8 +6,8 @@
 // a valid ProviderContext.
 
 use crate::{
-    Account, DateTime, ListResponse, Mailbox, Message, MessageFlags,
-    Page, ProviderContext, ProviderError, SearchResult, Uuid,
+    Account, DateTime, ListResponse, Mailbox, Message, MessageFlags, Page, ProviderContext,
+    ProviderError, SearchResult, Uuid,
 };
 use chrono::Utc;
 use serde::{Deserialize, Serialize};

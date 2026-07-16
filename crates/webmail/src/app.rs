@@ -1,7 +1,7 @@
 // Webmail app — shared components, routes, and API helpers.
 
 use leptos::prelude::*;
-use leptos_router::components::*;
+use leptos_router::components::{Outlet, Router};
 use types::Uuid;
 
 // Re-export domain types for UI bindings.
@@ -94,10 +94,7 @@ pub async fn fetch_accounts(tenant_id: Uuid) -> Result<Vec<Account>, String> {
     Err("Not yet wired".to_string())
 }
 
-pub async fn fetch_mailboxes(
-    tenant_id: Uuid,
-    account_id: Uuid,
-) -> Result<Vec<Mailbox>, String> {
+pub async fn fetch_mailboxes(tenant_id: Uuid, account_id: Uuid) -> Result<Vec<Mailbox>, String> {
     let _ = (tenant_id, account_id);
     Err("Not yet wired".to_string())
 }
