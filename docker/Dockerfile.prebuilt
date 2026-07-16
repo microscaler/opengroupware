@@ -1,0 +1,14 @@
+# Fast image: package an already-compiled binary (target/<profile>/<crate>)
+# instead of rebuilding in Docker. Used for rapid cluster iteration; the
+# release Dockerfile.service remains the CI/production path.
+#   docker build -f docker/Dockerfile.prebuilt \
+#     --build-arg CRATE=admin-api --build-arg PROFILE=debug -t <ref> .
+FROM debian:bookworm-slim
+ARG CRATE
+ARG PROFILE=debug
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates libssl3 && rm -rf /var/lib/apt/lists/* \
+    && useradd -r -u 10001 svc
+COPY target/${PROFILE}/${CRATE} /app/${CRATE}
+RUN chmod +x /app/${CRATE}
+USER svc

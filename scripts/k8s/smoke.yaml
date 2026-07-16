@@ -1,0 +1,33 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: og-smoke
+  namespace: opengroupware
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: smoke
+          image: curlimages/curl:8.11.0
+          command: ["sh", "-c"]
+          args:
+            - |
+              set -e
+              B=http://admin-api:8080
+              echo "== health"; curl -s $B/health; echo
+              echo "== create tenant acme"
+              curl -s -w " [%{http_code}]" -X POST $B/api/v1/tenants \
+                -H 'content-type: application/json' -H 'x-actor: deploy-smoke' \
+                -d '{"slug":"acme","name":"Acme Corp"}'; echo
+              echo "== list tenants"
+              curl -s $B/api/v1/tenants; echo
+              echo "== duplicate (expect 409)"
+              curl -s -w " [%{http_code}]" -X POST $B/api/v1/tenants \
+                -H 'content-type: application/json' -H 'x-actor: deploy-smoke' \
+                -d '{"slug":"acme","name":"dup"}'; echo
+              echo "== bad slug (expect 422)"
+              curl -s -w " [%{http_code}]" -X POST $B/api/v1/tenants \
+                -H 'content-type: application/json' -H 'x-actor: deploy-smoke' \
+                -d '{"slug":"-Bad!","name":"x"}'; echo
