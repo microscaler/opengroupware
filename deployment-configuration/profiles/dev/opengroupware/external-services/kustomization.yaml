@@ -9,6 +9,7 @@ resources:
   - minio.yaml
 
   # Mail stack
+  - stalwart-config.yaml
   - stalwart.yaml
   - rspamd.yaml
   - clamav.yaml

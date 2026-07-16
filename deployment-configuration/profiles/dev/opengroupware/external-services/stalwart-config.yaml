@@ -1,0 +1,100 @@
+# Stalwart configuration (real config.toml — the previous STALWART_* env
+# vars were fictional; Stalwart reads its TOML config with %{env:...}%
+# macros).
+#
+# The [directory] section is the PRD-OPENGROUPWARE F3 consumer: protocol
+# auth (IMAP/SMTP/DAV) verifies argon2id PHC hashes through the sesame
+# rp_directory views, as the SELECT-only rp_stalwart role.
+#
+# Prereqs per environment:
+#   * rp_stalwart LOGIN role in the sesame DB, granted rp_directory_read
+#   * rp-stalwart-credentials secret in this namespace:
+#       sops edit deployment-configuration/.../runtime/secrets.yaml
+#       (add username/password keys) — never commit plaintext.
+#
+# NOTE(verify-on-deploy): query/column names below follow the Stalwart
+# 0.11 SQL-directory schema; validate against the deployed image version
+# on first rollout (config check: `stalwart --validate-config`).
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stalwart-config
+  namespace: opengroupware
+  labels:
+    app.kubernetes.io/component: mailbox
+    app.kubernetes.io/part-of: opengroupware
+data:
+  config.toml: |
+    [server]
+    hostname = "mail.opengroupware.local"
+
+    [server.listener."smtp"]
+    bind = ["0.0.0.0:25"]
+    protocol = "smtp"
+
+    [server.listener."submission"]
+    bind = ["0.0.0.0:587"]
+    protocol = "smtp"
+
+    [server.listener."imap"]
+    bind = ["0.0.0.0:143"]
+    protocol = "imap"
+
+    [server.listener."http"]
+    bind = ["0.0.0.0:8080"]
+    protocol = "http"
+
+    [authentication.fallback-admin]
+    user = "admin"
+    secret = "%{env:STALWART_ADMIN_PASSWORD}%"
+
+    # ── Mail-plane data (ADR-0005: Stalwart owns all of it) ─────────────
+    [store."data"]
+    type = "postgresql"
+    host = "postgresql"
+    port = 5432
+    database = "%{env:STALWART_DB_NAME}%"
+    user = "%{env:STALWART_DB_USER}%"
+    password = "%{env:STALWART_DB_PASSWORD}%"
+
+    [store."blob"]
+    type = "s3"
+    endpoint = "http://minio:9000"
+    bucket = "opengroupware"
+    access-key = "%{env:STALWART_S3_ACCESS_KEY}%"
+    secret-key = "%{env:STALWART_S3_SECRET_KEY}%"
+
+    [storage]
+    data = "data"
+    fts = "data"
+    blob = "blob"
+    lookup = "data"
+    directory = "sesame"
+
+    # ── Identity (ADR-0006 v2): sesame rp_directory bridge ──────────────
+    # Separate Postgres database (sesame's), SELECT-only role.
+    [store."sesame-directory"]
+    type = "postgresql"
+    host = "%{env:SESAME_DB_HOST}%"
+    port = 5432
+    database = "%{env:SESAME_DB_NAME}%"
+    user = "%{env:RP_STALWART_USER}%"
+    password = "%{env:RP_STALWART_PASSWORD}%"
+
+    [store."sesame-directory".query]
+    # Primary credential + app passwords: any returned PHC hash may match.
+    name = "SELECT login AS name, 'individual' AS type, secret_phc AS secret, display_name AS description, login AS email FROM rp_directory.users WHERE login = $1"
+    secrets = "SELECT secret_phc FROM rp_directory.users WHERE login = $1 UNION ALL SELECT secret_phc FROM rp_directory.app_passwords WHERE login = $1"
+    emails = "SELECT login AS email FROM rp_directory.users WHERE login = $1"
+
+    [directory."sesame"]
+    type = "sql"
+    store = "sesame-directory"
+
+    [directory."sesame".columns]
+    name = "name"
+    type = "type"
+    secret = "secret"
+    description = "description"
+    email = "email"

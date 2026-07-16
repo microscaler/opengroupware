@@ -50,6 +50,26 @@ Doc 02 says Keycloak/Authentik OIDC. Doc 08 designs a homegrown credential store
 
 Fix list (execution order): (1) enforce `[lints] workspace = true` in every crate and purge `todo!()`/`unwrap()` in favor of `ProviderError`; (2) make the whole workspace compile, including Leptos feature flags; (3) split the 27-method `MailProvider` god-trait into `MailProvider` / `CalendarProvider` / `ContactsProvider` / `SieveProvider`; (4) shared `service-kit` crate providing axum bootstrap, `/health`, `/metrics`, `0.0.0.0` binding, tracing — used by every service so the manifests stop describing fiction; (5) real Stalwart management-API client as the first wrapper with an integration test against a containerized Stalwart.
 
+## Execution status (2026-07-16, end of first ownership session)
+
+Landed and verified: workspace green (all crates compile, clippy clean,
+tests pass); slice 1 provisioning live-proven with RLS isolation
+(privileged-connection guard added after the smoke test caught superuser
+bypass); secrets sops-encrypted with Flux decryption; Tilt + systemd dev
+loop on ms02 (port 10852). Sesame side (boy-scout rule): token-exchange
+module resurrected (35→89 tests), EdDSA signing wired (placeholder
+signatures eliminated), client_credentials grant implemented,
+app_passwords + rp_directory bridge migrated and smoke-tested, and
+opengroupware's admin-api now provisions accounts into sesame with
+audited activation. Stalwart's config rewritten to a real config.toml
+consuming rp_directory (verify query schema on first rollout).
+
+Open items: sesame RFC 7662 introspection + auth-code/PKCE (needs the
+OpenAPI codegen loop), app-password issue/revoke API (F2 endpoints),
+service-kit JWKS verification middleware, rp_stalwart role + secret per
+environment, Stalwart config validation on a live cluster, quarantine
+slice 2.
+
 ## Path out of conceptual stage
 
 The roadmap's own dependency graph says it: product DB/schema → admin API → config compiler → provision domain. The first vertical slice is **tenant/domain/account provisioning**: `POST /tenants` → Postgres (RLS on, `SET LOCAL` wrapper) → provision into sesame-idam + Stalwart via real API calls → audit row → visible in admin-console. That slice forces every hard decision above to be real code: the data-ownership boundary, the identity chain, the RLS pattern, the wrapper layer, and health/metrics. Abuse quarantine is slice 2; webmail read-path via JMAP is slice 3.

@@ -33,11 +33,14 @@ spec:
               containerPort: 25
             - name: jmap
               containerPort: 8081
+          args: ["--config", "/opt/stalwart/etc/config.toml"]
+          volumeMounts:
+            - name: config
+              mountPath: /opt/stalwart/etc
+          # Env consumed via %{env:...}% macros in config.toml — the
+          # previous STALWART_* vars were fictional (Stalwart ignores env
+          # without config macros). See stalwart-config.yaml.
           env:
-            - name: STALWART_DB_HOST
-              value: postgresql
-            - name: STALWART_DB_PORT
-              value: "5432"
             - name: STALWART_DB_USER
               valueFrom:
                 secretKeyRef:
@@ -48,20 +51,41 @@ spec:
                 secretKeyRef:
                   name: postgresql-credentials
                   key: password
-            - name: STALWART_STORAGE_BACKEND
-              value: s3
-            - name: STALWART_STORAGE_ENDPOINT
-              value: minio:9000
-            - name: STALWART_STORAGE_BUCKET
-              value: opengroupware
-            - name: STALWART_REDIS_HOST
-              value: redis
-            - name: STALWART_REDIS_PORT
-              value: "6379"
+            - name: STALWART_DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-credentials
+                  key: database
+            - name: STALWART_S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: minio-credentials
+                  key: access-key
+            - name: STALWART_S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: minio-credentials
+                  key: secret-key
             - name: STALWART_ADMIN_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: stalwart-admin-credentials
+                  key: password
+            # sesame rp_directory bridge (F3) — SELECT-only role in the
+            # sesame database. Secret added per environment via sops edit.
+            - name: SESAME_DB_HOST
+              value: "sesame-idam-postgres.sesame-idam.svc.cluster.local"
+            - name: SESAME_DB_NAME
+              value: "sesame"
+            - name: RP_STALWART_USER
+              valueFrom:
+                secretKeyRef:
+                  name: rp-stalwart-credentials
+                  key: username
+            - name: RP_STALWART_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: rp-stalwart-credentials
                   key: password
           livenessProbe:
             httpGet:
@@ -86,6 +110,10 @@ spec:
             limits:
               memory: "2Gi"
               cpu: "1000m"
+      volumes:
+        - name: config
+          configMap:
+            name: stalwart-config
 ---
 apiVersion: v1
 kind: Service
