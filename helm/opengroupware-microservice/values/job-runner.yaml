@@ -1,0 +1,53 @@
+service:
+  name: job-runner
+  port: 8082
+  containerPort: 8082
+image:
+  name: job-runner
+  repository: ghcr.io/microscaler/opengroupware
+app:
+  binaryName: job-runner
+  serviceName: job-runner
+deployment:
+  replicas: 1
+resources:
+  requests:
+    memory: 256Mi
+    cpu: 100m
+  limits:
+    memory: 512Mi
+    cpu: 500m
+config:
+  database:
+    host: postgres-primary
+    port: 5432
+    database: opengroupware
+    max_connections: 10
+  redis:
+    host: redis
+    port: 6379
+    max_connections: 20
+  minio:
+    endpoint: minio
+    port: 9000
+    bucket: opengroupware
+env:
+  RUST_LOG: info
+  RUST_BACKTRACE: '0'
+serviceType: ClusterIP
+healthCheck:
+  liveness:
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 2
+prometheus:
+  enabled: true
+  port: 9090
+  path: /metrics
+extraEnv: []

@@ -1,0 +1,55 @@
+# Default values for opengroupware-microservice.
+# Override these with service-specific values files.
+
+service:
+  name: ""            # e.g. admin-api, abuse-api, job-runner
+  port: 8080
+  containerPort: 8080
+
+image:
+  repository: ghcr.io/microscaler/opengroupware
+  name: ""            # e.g. admin-api
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+deployment:
+  replicas: 1
+  namespace: opengroupware
+  strategy: RollingUpdate
+
+app:
+  binaryName: ""      # e.g. admin-api
+  serviceName: ""     # For OTEL service name
+
+resources:
+  requests:
+    memory: "256Mi"
+    cpu: "100m"
+  limits:
+    memory: "512Mi"
+    cpu: "250m"
+
+healthCheck:
+  liveness:
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 2
+
+env:
+  RUST_LOG: "info"
+  RUST_BACKTRACE: "0"
+
+serviceType: ClusterIP
+
+prometheus:
+  enabled: true
+  port: 9090
+  path: "/metrics"
+
+extraEnv: []

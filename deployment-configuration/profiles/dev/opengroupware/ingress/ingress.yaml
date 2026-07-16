@@ -1,0 +1,55 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: opengroupware-ingress
+  namespace: opengroupware
+  labels:
+    app.kubernetes.io/component: ingress
+    app.kubernetes.io/part-of: opengroupware
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  tls:
+    - hosts:
+        - CHANGE_ME.mail.example.com
+        - CHANGE_ME-admin.example.com
+      secretName: opengroupware-tls-secret
+  rules:
+    - host: CHANGE_ME.mail.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: webmail
+                port:
+                  number: 3000
+    - host: CHANGE_ME-admin.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: admin-console
+                port:
+                  number: 3001
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: admin-api
+                port:
+                  number: 8080
+    - host: CHANGE_ME.abuse.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: abuse-api
+                port:
+                  number: 8081

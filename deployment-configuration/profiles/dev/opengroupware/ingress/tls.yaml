@@ -1,0 +1,19 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: opengroupware-tls
+  namespace: opengroupware
+  labels:
+    app.kubernetes.io/component: ingress
+    app.kubernetes.io/part-of: opengroupware
+spec:
+  secretName: opengroupware-tls-secret
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - CHANGE_ME.mail.example.com
+    - CHANGE_ME-admin.example.com
+  secretTemplate:
+    annotations:
+      kubernetes.io/tls-acme: "true"

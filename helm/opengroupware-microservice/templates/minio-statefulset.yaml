@@ -1,0 +1,95 @@
+{{- if and .Values.external .Values.external.minio .Values.external.minio.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: minio
+  namespace: {{ .Values.deployment.namespace | default "opengroupware" }}
+  labels:
+    app: minio
+    app.kubernetes.io/component: external-service
+    app.kubernetes.io/part-of: opengroupware
+    {{- include "opengroupware.labels" . | nindent 4 }}
+spec:
+  {{- if .Values.external.minio.replicas }}
+  serviceName: minio-headless
+  replicas: {{ .Values.external.minio.replicas }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app: minio
+  template:
+    metadata:
+      labels:
+        app: minio
+        {{- include "opengroupware.labels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: minio
+          image: {{ .Values.external.minio.image | default "docker.io/minio/minio:latest" }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 9000
+              protocol: TCP
+            - name: api
+              containerPort: 9001
+              protocol: TCP
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: minio-credentials
+                  key: access-key
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: minio-credentials
+                  key: secret-key
+            - name: MINIO_PROMETHEUS_AUTH_TYPE
+              value: public
+          args:
+            - server
+            - /data
+            - --console-address
+            - ":9001"
+            - --address
+            - ":9000"
+          livenessProbe:
+            httpGet:
+              path: /minio/health/live
+              port: 9000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /minio/health/ready
+              port: 9000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          resources:
+            requests:
+              memory: {{ .Values.external.minio.resources.requests.memory | default "512Mi" }}
+              cpu: {{ .Values.external.minio.resources.requests.cpu | default "200m" }}
+            limits:
+              memory: {{ .Values.external.minio.resources.limits.memory | default "1Gi" }}
+              cpu: {{ .Values.external.minio.resources.limits.cpu | default "500m" }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+  {{- if and .Values.external.minio .Values.external.minio.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+        {{- toYaml .Values.external.minio.persistence.accessModes | nindent 10 }}
+        storageClassName: {{ .Values.external.minio.persistence.storageClassName | quote }}
+        resources:
+          requests:
+            storage: {{ .Values.external.minio.persistence.size | quote }}
+  {{- end }}
+{{- end }}

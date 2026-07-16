@@ -1,0 +1,73 @@
+{{- if and .Values.external .Values.external.rspamd .Values.external.rspamd.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rspamd
+  namespace: {{ .Values.deployment.namespace | default "opengroupware" }}
+  labels:
+    app: rspamd
+    app.kubernetes.io/component: external-service
+    app.kubernetes.io/part-of: opengroupware
+    {{- include "opengroupware.labels" . | nindent 4 }}
+spec:
+  {{- if .Values.external.rspamd.replicas }}
+  replicas: {{ .Values.external.rspamd.replicas }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app: rspamd
+  template:
+    metadata:
+      labels:
+        app: rspamd
+        {{- include "opengroupware.labels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: rspamd
+          image: {{ .Values.external.rspamd.image | default "docker.io/rspamd/rspamd:latest" }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 11334
+              protocol: TCP
+            - name: milter
+              containerPort: 11332
+              protocol: TCP
+          env:
+            - name: RSPAMD_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: rspamd-credentials
+                  key: password
+          livenessProbe:
+            httpGet:
+              path: /helo
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /helo
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          resources:
+            requests:
+              memory: {{ .Values.external.rspamd.resources.requests.memory | default "256Mi" }}
+              cpu: {{ .Values.external.rspamd.resources.requests.cpu | default "100m" }}
+            limits:
+              memory: {{ .Values.external.rspamd.resources.limits.memory | default "512Mi" }}
+              cpu: {{ .Values.external.rspamd.resources.limits.cpu | default "500m" }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/rspamd
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: rspamd-config
+{{- end }}

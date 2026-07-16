@@ -1,0 +1,26 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: database-migration
+  namespace: opengroupware
+  labels:
+    app.kubernetes.io/component: migration
+    app.kubernetes.io/part-of: opengroupware
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: migrate
+          image: ghcr.io/microscaler/opengroupware/config-compiler:0.1.0
+          command: ["/app/config-compiler", "migrate", "--up"]
+          env:
+            - name: RUST_LOG
+              value: "info"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "300m"

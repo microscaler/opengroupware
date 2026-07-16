@@ -1,0 +1,110 @@
+{{- if and .Values.external .Values.external.stalwart .Values.external.stalwart.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stalwart-mail
+  namespace: {{ .Values.deployment.namespace | default "opengroupware" }}
+  labels:
+    app: stalwart-mail
+    app.kubernetes.io/component: external-service
+    app.kubernetes.io/part-of: opengroupware
+    {{- include "opengroupware.labels" . | nindent 4 }}
+spec:
+  {{- if .Values.external.stalwart.replicas }}
+  replicas: {{ .Values.external.stalwart.replicas }}
+  {{- end }}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: stalwart-mail
+  template:
+    metadata:
+      labels:
+        app: stalwart-mail
+        {{- include "opengroupware.labels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: stalwart-mail
+          image: {{ .Values.external.stalwart.image | default "ghcr.io/stalwart-mail/stalwart-mail:latest" }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: imap
+              containerPort: 143
+              protocol: TCP
+            - name: smtp
+              containerPort: 25
+              protocol: TCP
+            - name: jmap
+              containerPort: 8081
+              protocol: TCP
+          env:
+            - name: STALWART_DB_HOST
+              value: {{ .Values.external.stalwart.database.host | default "postgres-primary" | quote }}
+            - name: STALWART_DB_PORT
+              value: {{ .Values.external.stalwart.database.port | default "5432" | quote }}
+            - name: STALWART_DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: stalwart-database-credentials
+                  key: username
+            - name: STALWART_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: stalwart-database-credentials
+                  key: password
+            - name: STALWART_STORAGE_BACKEND
+              value: {{ .Values.external.stalwart.storage.backend | default "s3" | quote }}
+            - name: STALWART_STORAGE_ENDPOINT
+              value: {{ .Values.external.stalwart.storage.endpoint | default "minio:9000" | quote }}
+            - name: STALWART_STORAGE_BUCKET
+              value: {{ .Values.external.stalwart.storage.bucket | default "opengroupware" | quote }}
+            - name: STALWART_REDIS_HOST
+              value: {{ .Values.external.stalwart.redis.host | default "redis" | quote }}
+            - name: STALWART_REDIS_PORT
+              value: {{ .Values.external.stalwart.redis.port | default "6379" | quote }}
+            - name: STALWART_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: stalwart-admin-credentials
+                  key: password
+          livenessProbe:
+            httpGet:
+              path: /admin
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /admin
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          resources:
+            requests:
+              memory: {{ .Values.external.stalwart.resources.requests.memory | default "512Mi" }}
+              cpu: {{ .Values.external.stalwart.resources.requests.cpu | default "200m" }}
+            limits:
+              memory: {{ .Values.external.stalwart.resources.limits.memory | default "2Gi" }}
+              cpu: {{ .Values.external.stalwart.resources.limits.cpu | default "1000m" }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/stalwart
+              readOnly: true
+            - name: data
+              mountPath: /opt/stalwart-mail/data
+      volumes:
+        - name: config
+          configMap:
+            name: stalwart-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: stalwart-data
+{{- end }}

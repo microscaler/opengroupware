@@ -1,0 +1,62 @@
+service:
+  name: admin-api
+  port: 8080
+  containerPort: 8080
+image:
+  name: admin-api
+  repository: ghcr.io/microscaler/opengroupware
+app:
+  binaryName: admin-api
+  serviceName: admin-api
+deployment:
+  replicas: 2
+resources:
+  requests:
+    memory: 256Mi
+    cpu: 100m
+  limits:
+    memory: 512Mi
+    cpu: 300m
+config:
+  database:
+    host: postgres-primary
+    port: 5432
+    database: opengroupware
+    max_connections: 20
+  redis:
+    host: redis
+    port: 6379
+    max_connections: 10
+  jwt:
+    secret: CHANGE_ME
+  cors:
+    origins:
+    - http://localhost:3000
+    - http://localhost:3001
+    allowed_methods:
+    - GET
+    - POST
+    - PUT
+    - DELETE
+extraEnv:
+- name: ADMIN_API_PORT
+  value: '8080'
+env:
+  RUST_LOG: info
+  RUST_BACKTRACE: '0'
+serviceType: ClusterIP
+healthCheck:
+  liveness:
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 2
+prometheus:
+  enabled: true
+  port: 9090
+  path: /metrics

@@ -1,0 +1,46 @@
+service:
+  name: webmail
+  port: 3000
+  containerPort: 3000
+image:
+  name: webmail
+  repository: ghcr.io/microscaler/opengroupware
+app:
+  binaryName: webmail
+  serviceName: webmail
+deployment:
+  replicas: 2
+resources:
+  requests:
+    memory: 128Mi
+    cpu: 50m
+  limits:
+    memory: 256Mi
+    cpu: 200m
+config:
+  leptos:
+    site_addr: 0.0.0.0:3000
+  admin_api:
+    endpoint: http://admin-api:8080
+  abuse_api:
+    endpoint: http://abuse-api:8081
+env:
+  RUST_LOG: info
+  RUST_BACKTRACE: '0'
+serviceType: ClusterIP
+healthCheck:
+  liveness:
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 2
+prometheus:
+  enabled: true
+  port: 9090
+  path: /metrics
+extraEnv: []

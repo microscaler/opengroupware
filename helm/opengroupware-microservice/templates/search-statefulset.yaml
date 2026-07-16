@@ -1,0 +1,81 @@
+{{- if and .Values.external .Values.external.search .Values.external.search.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: search
+  namespace: {{ .Values.deployment.namespace | default "opengroupware" }}
+  labels:
+    app: search
+    app.kubernetes.io/component: external-service
+    app.kubernetes.io/part-of: opengroupware
+    {{- include "opengroupware.labels" . | nindent 4 }}
+spec:
+  {{- if .Values.external.search.replicas }}
+  serviceName: search-headless
+  replicas: {{ .Values.external.search.replicas }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app: search
+  template:
+    metadata:
+      labels:
+        app: search
+        {{- include "opengroupware.labels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: search
+          image: {{ .Values.external.search.image | default "docker.io/opensearchproject/opensearch:2.11" }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: {{ .Values.external.search.port | default 9200 }}
+              protocol: TCP
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: CLUSTER_INITIAL_MASTER_NODES
+              value: {{ .Values.external.search.clusterInitialMasterNodes | default "search-0" | quote }}
+            - name: DISCOVERY_SEED_HOSTS
+              value: {{ .Values.external.search.discoverySeedHosts | default "search-0.search-headless.opengroupware.svc.cluster.local" | quote }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.external.search.healthPath | default "/_cluster/health" }}
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.external.search.healthPath | default "/_cluster/health" }}
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          resources:
+            requests:
+              memory: {{ .Values.external.search.resources.requests.memory | default "512Mi" }}
+              cpu: {{ .Values.external.search.resources.requests.cpu | default "200m" }}
+            limits:
+              memory: {{ .Values.external.search.resources.limits.memory | default "2Gi" }}
+              cpu: {{ .Values.external.search.resources.limits.cpu | default "1000m" }}
+          volumeMounts:
+            - name: data
+              mountPath: /usr/share/search/data
+  {{- if and .Values.external.search .Values.external.search.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+        {{- toYaml .Values.external.search.persistence.accessModes | nindent 10 }}
+        storageClassName: {{ .Values.external.search.persistence.storageClassName | quote }}
+        resources:
+          requests:
+            storage: {{ .Values.external.search.persistence.size | quote }}
+  {{- end }}
+{{- end }}
