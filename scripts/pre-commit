@@ -21,21 +21,57 @@ NC='\033[0m' # No Color
 ERRORS=0
 
 # ---------------------------------------------------------------------------
-# Plaintext Kubernetes Secrets guard
+# Secret / credential guard (GitGuardian-style, offline)
 # ---------------------------------------------------------------------------
-# Any staged file under deployment-configuration/ that contains a Kubernetes
-# Secret with stringData/data MUST be sops-encrypted (i.e. contain a `sops:`
-# metadata block). See .sops.yaml and scripts/secrets-bootstrap.sh.
-while IFS= read -r file; do
-    [ -f "$file" ] || continue
-    if grep -q "kind: Secret" "$file" && grep -qE "^(stringData|data):" "$file"; then
-        if ! grep -q "^sops:" "$file"; then
-            echo -e "${RED}ERROR:${NC} Unencrypted Kubernetes Secret staged: $file"
-            echo "       Run scripts/secrets-bootstrap.sh (sops+age) before committing."
-            ERRORS=$((ERRORS + 1))
-        fi
+# Scans ALL staged files for unencrypted Kubernetes Secrets, inline plaintext
+# credentials (env values, connection URIs, password/token literals), and
+# private/age keys. sops-encrypted files (`sops:` block / ENC[...]) pass.
+# If `gitleaks` is installed it runs too. ALLOW_SECRET=1 bypasses (logged).
+
+secret_allow='CHANGE_ME|__GENERATE__|%\{env:|secretKeyRef|valueFrom|EXAMPLE|changeme|xxxxxxxx|\$\(|\{\{|redacted'
+
+scan_file_for_secrets() {
+    local file="$1"
+    [ -f "$file" ] || return 0
+    grep -q "^sops:" "$file" && return 0
+    grep -q "ENC\[" "$file" && return 0
+    case "$file" in scripts/pre-commit) return 0 ;; esac
+
+    local hits=""
+    if grep -q "kind: Secret" "$file" && grep -qE "^[[:space:]]*(stringData|data):" "$file"; then
+        hits="$hits\n  unencrypted Kubernetes Secret (needs sops)"
     fi
-done < <(git diff --cached --name-only --diff-filter=ACM 2>/dev/null | grep "^deployment-configuration/" || true)
+    if grep -EI '[a-z0-9+.-]+://[^/[:space:]]+:[^/@[:space:]]+@' "$file" 2>/dev/null \
+         | grep -Evq "$secret_allow"; then
+        hits="$hits\n  credential in connection URI (user:pass@host)"
+    fi
+    if grep -EiI "(password|passwd|secret|token|api[_-]?key|access[_-]?key)[\"'[:space:]]*[:=][[:space:]]*[\"'][^\"'[:space:]]{6,}" "$file" 2>/dev/null \
+         | grep -Evq "$secret_allow"; then
+        hits="$hits\n  inline password/secret/token literal"
+    fi
+    if grep -qE 'BEGIN (RSA |EC |OPENSSH |PGP )?PRIVATE KEY|AGE-SECRET-KEY-1' "$file" 2>/dev/null; then
+        hits="$hits\n  private key / age secret key material"
+    fi
+
+    if [ -n "$hits" ]; then
+        echo -e "${RED}ERROR:${NC} possible unencrypted secret in: $file$hits"
+        ERRORS=$((ERRORS + 1))
+    fi
+}
+
+if [ "${ALLOW_SECRET:-0}" = "1" ]; then
+    echo -e "${YELLOW}WARNING:${NC} ALLOW_SECRET=1 — secret scan BYPASSED for this commit."
+else
+    while IFS= read -r file; do
+        scan_file_for_secrets "$file"
+    done < <(git diff --cached --name-only --diff-filter=ACM 2>/dev/null || true)
+    if command -v gitleaks >/dev/null 2>&1; then
+        gitleaks protect --staged --no-banner >/dev/null 2>&1 || {
+            echo -e "${RED}ERROR:${NC} gitleaks flagged staged changes (gitleaks protect --staged -v)"
+            ERRORS=$((ERRORS + 1))
+        }
+    fi
+fi
 
 # ---------------------------------------------------------------------------
 # Max function length (60 lines)

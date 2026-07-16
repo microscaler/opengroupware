@@ -2,17 +2,10 @@
 # dedicated Postgres (the shared postgres-ha is fronted by pgpool, whose
 # pool_passwd doesn't know ad-hoc roles; opengroupware owning its own data
 # store also matches ADR-0005 intent). Direct-apply bootstrap, not GitOps.
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: og-postgres-init
-  namespace: opengroupware
-data:
-  # Runs once on first DB init. Creates the restricted login role the
-  # admin-api uses; the RLS startup guard requires a NON-privileged role.
-  init.sql: |
-    CREATE ROLE og_app LOGIN PASSWORD 'app-pw-dev';
+#
+# SECRETS: all DB passwords come from the `og-db-credentials` Secret, which
+# scripts/deploy-shared-k8s.sh (step `secret`) generates with random values
+# and is NOT committed. No plaintext credentials in this file.
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -34,7 +27,10 @@ spec:
           env:
             - { name: POSTGRES_DB, value: opengroupware }
             - { name: POSTGRES_USER, value: postgres }
-            - { name: POSTGRES_PASSWORD, value: super-pw-dev }
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: og-db-credentials, key: superuser-password } }
+            - name: OG_APP_PASSWORD
+              valueFrom: { secretKeyRef: { name: og-db-credentials, key: app-password } }
             - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
           ports: [{ containerPort: 5432, name: pg }]
           volumeMounts:
@@ -52,6 +48,21 @@ spec:
           emptyDir: {}          # dev bootstrap; PVC for anything persistent
         - name: init
           configMap: { name: og-postgres-init }
+---
+# initdb script reads OG_APP_PASSWORD from env (injected from the secret) —
+# no password literal in the manifest.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: og-postgres-init
+  namespace: opengroupware
+data:
+  init.sh: |
+    #!/bin/bash
+    set -e
+    psql -v ON_ERROR_STOP=1 -U postgres -d opengroupware <<SQL
+    CREATE ROLE og_app LOGIN PASSWORD '${OG_APP_PASSWORD}';
+    SQL
 ---
 apiVersion: v1
 kind: Service
@@ -85,7 +96,10 @@ spec:
             - { name: RUST_LOG, value: info }
             - { name: MIGRATE_ONLY, value: "1" }
             - { name: OPENGROUPWARE_ALLOW_UNSAFE_DB, value: "1" }
-            - { name: DATABASE_URL, value: "postgres://postgres:super-pw-dev@og-postgres:5432/opengroupware" }
+            - name: DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: og-db-credentials, key: superuser-password } }
+            - name: DATABASE_URL
+              value: "postgres://postgres:$(DB_PASSWORD)@og-postgres:5432/opengroupware"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -108,7 +122,10 @@ spec:
           env:
             - { name: RUST_LOG, value: info }
             # Restricted app role — RLS guard refuses privileged connections.
-            - { name: DATABASE_URL, value: "postgres://og_app:app-pw-dev@og-postgres:5432/opengroupware" }
+            - name: DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: og-db-credentials, key: app-password } }
+            - name: DATABASE_URL
+              value: "postgres://og_app:$(DB_PASSWORD)@og-postgres:5432/opengroupware"
           livenessProbe:
             httpGet: { path: /health, port: http }
             initialDelaySeconds: 5
