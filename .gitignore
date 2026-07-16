@@ -28,3 +28,4 @@ age.key
 keys.txt
 *.dec.yaml
 *.plain.yaml
+.git-commit-msg.tmp
