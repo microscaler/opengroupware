@@ -63,9 +63,22 @@ SQL
   echo "db ready"
 }
 
-step_apply() {
-  echo "== namespace + self-contained workloads (own postgres)"
+# Generate DB credentials as a k8s Secret with random values. Never
+# committed; the manifest references it via secretKeyRef.
+step_secret() {
   K create namespace "$NS" --dry-run=client -o yaml | K apply -f -
+  local su app
+  su=$(openssl rand -hex 24); app=$(openssl rand -hex 24)
+  K -n "$NS" create secret generic og-db-credentials \
+    --from-literal=superuser-password="$su" \
+    --from-literal=app-password="$app" \
+    --dry-run=client -o yaml | K apply -f -
+  echo "og-db-credentials secret created/rotated"
+}
+
+step_apply() {
+  echo "== namespace + secret + self-contained workloads (own postgres)"
+  step_secret
   K apply -f "$REPO/scripts/k8s/admin-api-deploy.yaml"
 }
 
@@ -97,6 +110,7 @@ step_verify() {
 case "${1:-all}" in
   image) step_image ;;
   db) step_db ;;
+  secret) step_secret ;;
   apply) step_apply ;;
   verify) step_verify ;;
   grant) step_grant ;;

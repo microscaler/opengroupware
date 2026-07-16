@@ -21,21 +21,72 @@ NC='\033[0m' # No Color
 ERRORS=0
 
 # ---------------------------------------------------------------------------
-# Plaintext Kubernetes Secrets guard
+# Secret / credential guard (GitGuardian-style, offline)
 # ---------------------------------------------------------------------------
-# Any staged file under deployment-configuration/ that contains a Kubernetes
-# Secret with stringData/data MUST be sops-encrypted (i.e. contain a `sops:`
-# metadata block). See .sops.yaml and scripts/secrets-bootstrap.sh.
-while IFS= read -r file; do
-    [ -f "$file" ] || continue
-    if grep -q "kind: Secret" "$file" && grep -qE "^(stringData|data):" "$file"; then
-        if ! grep -q "^sops:" "$file"; then
-            echo -e "${RED}ERROR:${NC} Unencrypted Kubernetes Secret staged: $file"
-            echo "       Run scripts/secrets-bootstrap.sh (sops+age) before committing."
+# Scans ALL staged files (not just deployment-configuration/) for:
+#   1. unencrypted Kubernetes Secrets (must carry a `sops:` block),
+#   2. inline plaintext credentials in manifests, code, URLs, and env,
+#   3. private keys / age keys.
+# If `gitleaks` is installed it runs too (defence in depth). Set
+# ALLOW_SECRET=1 to bypass for a single intentional commit (e.g. test
+# fixtures) — logged loudly.
+
+is_encrypted() { grep -q "^sops:" "$1" || grep -q "ENC\[" "$1"; }
+
+# Allowlist: obvious non-secrets that would trip the heuristics.
+secret_allow='CHANGE_ME|__GENERATE__|%\{env:|secretKeyRef|valueFrom|EXAMPLE|changeme|xxxxxxxx|\$\(|\{\{'
+
+scan_file_for_secrets() {
+    local file="$1"
+    [ -f "$file" ] || return 0
+    # Skip the encrypted secrets and this hook itself.
+    is_encrypted "$file" && return 0
+    case "$file" in
+        scripts/pre-commit|*.enc.yaml) return 0 ;;
+    esac
+
+    local hits=""
+    # a) Kubernetes Secret not sops-encrypted.
+    if grep -q "kind: Secret" "$file" && grep -qE "^\s*(stringData|data):" "$file"; then
+        hits="$hits\n  unencrypted Kubernetes Secret (needs sops)"
+    fi
+    # b) Credentials embedded in a connection URI: scheme://user:pass@host
+    if grep -EqI '[a-z0-9+.-]+://[^/[:space:]]+:[^/@[:space:]]+@' "$file"; then
+        grep -Evq "$secret_allow" <<<"$(grep -EI '[a-z0-9+.-]+://[^/[:space:]]+:[^/@[:space:]]+@' "$file")" \
+            && hits="$hits\n  credential in connection URI (user:pass@host)"
+    fi
+    # c) Inline password/secret/token/apikey assignments with a real value.
+    if grep -EqiI "(password|passwd|secret|token|api[_-]?key|access[_-]?key)['\"[:space:]]*[:=][[:space:]]*['\"][^'\"[:space:]]{6,}" "$file"; then
+        grep -EiI "(password|passwd|secret|token|api[_-]?key|access[_-]?key)['\"[:space:]]*[:=][[:space:]]*['\"][^'\"[:space:]]{6,}" "$file" \
+            | grep -Evq "$secret_allow" \
+            && hits="$hits\n  inline password/secret/token literal"
+    fi
+    # d) Private keys / age secret keys.
+    if grep -qE 'BEGIN (RSA |EC |OPENSSH |PGP )?PRIVATE KEY|AGE-SECRET-KEY-1' "$file"; then
+        hits="$hits\n  private key / age secret key material"
+    fi
+
+    if [ -n "$hits" ]; then
+        echo -e "${RED}ERROR:${NC} possible unencrypted secret in: $file$hits"
+        ERRORS=$((ERRORS + 1))
+    fi
+}
+
+if [ "${ALLOW_SECRET:-0}" = "1" ]; then
+    echo -e "${YELLOW}WARNING:${NC} ALLOW_SECRET=1 — secret scan BYPASSED for this commit."
+else
+    while IFS= read -r file; do
+        scan_file_for_secrets "$file"
+    done < <(git diff --cached --name-only --diff-filter=ACM 2>/dev/null || true)
+
+    # Optional: gitleaks on the staged diff if available.
+    if command -v gitleaks >/dev/null 2>&1; then
+        if ! gitleaks protect --staged --no-banner >/dev/null 2>&1; then
+            echo -e "${RED}ERROR:${NC} gitleaks flagged staged changes. Run: gitleaks protect --staged -v"
             ERRORS=$((ERRORS + 1))
         fi
     fi
-done < <(git diff --cached --name-only --diff-filter=ACM 2>/dev/null | grep "^deployment-configuration/" || true)
+fi
 
 # ---------------------------------------------------------------------------
 # Max function length (60 lines)
