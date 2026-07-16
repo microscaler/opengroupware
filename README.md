@@ -13,10 +13,15 @@ These docs are intentionally written as **Mermaid-first Markdown** so they can l
 | Doc | Purpose |
 |---|---|
 | [`01-component-catalog.md`](./01-component-catalog.md) | FOSS/custom/commercial component map and replacement choices. |
-| [`02-greenfield-architecture.md`](./02-greenfield-architecture.md) | System architecture, deployment boundaries, and service graph. |
-| [`03-abuse-pipeline.md`](./03-abuse-pipeline.md) | Spam, phishing, malware, quarantine, and feedback loop design. |
-| [`04-domain-model-erd.md`](./04-domain-model-erd.md) | Core entity relationship model for tenants, users, mailboxes, messages, policies, quarantine, and audit. |
-| [`05-build-roadmap.md`](./05-build-roadmap.md) | MVP sequencing, build/buy/glue boundaries, and milestones. |
+| [`02-greenfield-architecture.md`](./02-greenfield-architecture.md) | System architecture, deployment boundaries, service graph, multi-tenancy, HA/DR, operational model, protocol coverage, performance targets. |
+| [`03-abuse-pipeline.md`](./03-abuse-pipeline.md) | Spam, phishing, malware, quarantine, feedback loop, threat intelligence, DMARC reporting, shadow-copy, and digest design. |
+| [`04-domain-model-erd.md`](./04-domain-model-erd.md) | Core entity relationship model: tenants, users, mailboxes, messages, policies, quarantine, audit, delivery, sessions, DMARC, threat intel. |
+| [`05-build-roadmap.md`](./05-build-roadmap.md) | MVP sequencing, build/buy/glue boundaries, parallel spikes, ADRs, and success criteria. |
+| [`06-design-audit.md`](./06-design-audit.md) | Gap analysis of original design across 11 categories — 4 P0s, 25 P1s, 28 P2s, 3 P3s. |
+| [`07-multi-tenancy-isolation.md`](./07-multi-tenancy-isolation.md) | Multi-tenant isolation model: RLS, schema-per-tenant, Redis/S3/search prefix isolation, tenant lifecycle, quotas, data residency. |
+| [`08-security-model.md`](./08-security-model.md) | Authentication (OIDC, app passwords, OAuth2, mTLS), MFA policy, session management, API auth, TLS, secrets management, audit logging, incident response. |
+| [`09-kubernetes-deployment.md`](./09-kubernetes-deployment.md) | K8s deployment architecture: three scaling phases (single-node → multi-node → multi-region), per-component sharding strategies, config compiler operator, HPA/VPA, node pools, backup/DR, monitoring. |
+| [`10-foss-component-audit.md`](./10-foss-component-audit.md) | FOSS component evaluation for all 14 components — 8-criteria scoring (operational simplicity, protocol coverage, extensibility, backup, search, groupware maturity, abuse integration, multi-tenancy). Track A vs Track B comparison. |
 
 ## Architecture stance
 
