@@ -39,6 +39,49 @@ spec:
               value: "info"
             - name: RUST_BACKTRACE
               value: "0"
+            # Control-plane DB (same as admin-api). Non-privileged role: the
+            # RLS platform-admin path is via `SET app.is_platform_admin`, not
+            # a BYPASSRLS/superuser connection.
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-credentials
+                  key: username
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-credentials
+                  key: password
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-credentials
+                  key: database
+            - name: DATABASE_URL
+              value: "postgres://$(DB_USER):$(DB_PASSWORD)@pgbouncer:6432/$(DB_NAME)"
+            # sesame-idam integration (ADR-0006 v2). Absent/empty values
+            # disable reconciliation (job-runner serves health only).
+            - name: SESAME_LOGIN_URL
+              value: "http://sesame-idam-login.sesame-idam.svc.cluster.local:8080"
+            - name: SESAME_USER_MGMT_URL
+              value: "http://sesame-idam-user-mgmt.sesame-idam.svc.cluster.local:8080"
+            - name: SESAME_TENANT
+              value: "opengroupware"
+            - name: SESAME_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: sesame-idam-integration
+                  key: client-id
+            - name: SESAME_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: sesame-idam-integration
+                  key: client-secret
+            # Reconciliation cadence (see crates/job-runner/src/reconcile.rs).
+            - name: RECONCILE_INTERVAL_SECS
+              value: "30"
+            - name: RECONCILE_BATCH
+              value: "50"
           livenessProbe:
             httpGet:
               path: /health

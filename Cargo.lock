@@ -1369,10 +1369,16 @@ name = "job-runner"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "og-db",
+ "serde_json",
  "service-kit",
+ "sqlx",
+ "thiserror 2.0.18",
  "tokio",
  "tracing",
  "types",
+ "uuid",
+ "wrappers",
 ]
 
 [[package]]
