@@ -11,6 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 service-kit = { path = "../service-kit" }
+og-db = { path = "../og-db" }
 types = { workspace = true }
 wrappers = { path = "../wrappers" }
 axum = { workspace = true }

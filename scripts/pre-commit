@@ -28,7 +28,11 @@ ERRORS=0
 # private/age keys. sops-encrypted files (`sops:` block / ENC[...]) pass.
 # If `gitleaks` is installed it runs too. ALLOW_SECRET=1 bypasses (logged).
 
-secret_allow='CHANGE_ME|__GENERATE__|%\{env:|secretKeyRef|valueFrom|EXAMPLE|changeme|xxxxxxxx|\$\(|\{\{|redacted'
+# Allowlist: placeholders and non-literals. The last alternative exempts a
+# value that is a shell/template expansion ( ...=$VAR, ="$VAR", =${VAR},
+# =$(cmd), ={{ tmpl }} ) — a reference is never a hardcoded secret; only
+# quoted string literals are.
+secret_allow='CHANGE_ME|__GENERATE__|%\{env:|secretKeyRef|valueFrom|EXAMPLE|changeme|xxxxxxxx|redacted|[:=][[:space:]]*["'"'"']?[$]|\{\{'
 
 scan_file_for_secrets() {
     local file="$1"

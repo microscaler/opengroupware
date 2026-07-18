@@ -11,9 +11,8 @@ use axum::routing::post;
 use axum::{Json, Router};
 use uuid::Uuid;
 
-use crate::audit::{record, AuditEntry};
-use crate::db::Db;
-use crate::error::ApiError;
+use og_db::{record, ApiError, AuditEntry, Db};
+
 use crate::models::{
     validate_fqdn, validate_local_part, validate_slug, Account, CreateAccount, CreateDomain,
     CreateTenant, Domain, Tenant,

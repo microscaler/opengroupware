@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::error::ApiError;
+use og_db::ApiError;
 
 // ---------------------------------------------------------------------------
 // Rows

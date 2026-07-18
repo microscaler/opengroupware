@@ -1,4 +1,4 @@
-//! Database access — the ONLY way admin-api code touches Postgres.
+//! Database access — the ONLY way service code touches Postgres.
 //!
 //! D4 (docs/13): RLS is keyed off a per-transaction GUC. `set_config(...,
 //! true)` == `SET LOCAL`, so the setting dies with the transaction and can
@@ -8,10 +8,10 @@
 //!
 //! Safety guard: RLS does not apply to superusers or BYPASSRLS roles, so a
 //! privileged connection silently disables tenant isolation (verified live
-//! in the slice-1 smoke test). [`Db::connect`] therefore fails closed if the
-//! connecting role is privileged, unless OPENGROUPWARE_ALLOW_UNSAFE_DB=1
-//! (development escape hatch only).
+//! in the slice-1 smoke test). [`Db::connect`] fails closed on a privileged
+//! role unless OPENGROUPWARE_ALLOW_UNSAFE_DB=1 (dev escape hatch only).
 
+use sqlx::migrate::Migrator;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::{PgPool, Postgres, Row, Transaction};
 use uuid::Uuid;
@@ -33,10 +33,11 @@ impl Db {
         Ok(db)
     }
 
-    /// Run migrations. Called only when RUN_MIGRATIONS is set (the k8s
-    /// bootstrap job / dev bootstrap) — the service role has no DDL rights.
-    pub async fn migrate(&self) -> Result<(), sqlx::Error> {
-        sqlx::migrate!("./migrations")
+    /// Run the caller's migrations. Each service passes its own
+    /// `sqlx::migrate!("./migrations")` (the macro resolves relative to the
+    /// calling crate). Invoked only in the migration Job / dev bootstrap.
+    pub async fn run_migrations(&self, migrator: &Migrator) -> Result<(), sqlx::Error> {
+        migrator
             .run(&self.pool)
             .await
             .map_err(|e| sqlx::Error::Migrate(Box::new(e)))
@@ -88,8 +89,8 @@ impl Db {
         Ok(tx)
     }
 
-    /// Begin a platform-admin transaction (tenant lifecycle, cross-tenant
-    /// reads). Audited by callers; the flag is transaction-local.
+    /// Begin a platform-admin transaction (cross-tenant reads / lifecycle).
+    /// Audited by callers; the flag is transaction-local.
     pub async fn platform_tx(&self) -> Result<Transaction<'_, Postgres>, sqlx::Error> {
         let mut tx = self.pool.begin().await?;
         sqlx::query("SELECT set_config('app.is_platform_admin', 'true', true)")

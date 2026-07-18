@@ -7,10 +7,17 @@ name = "abuse-api"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "chrono",
+ "og-db",
+ "serde",
+ "serde_json",
  "service-kit",
+ "sqlx",
+ "thiserror 2.0.18",
  "tokio",
  "tracing",
  "types",
+ "uuid",
 ]
 
 [[package]]
@@ -19,6 +26,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "chrono",
+ "og-db",
  "serde",
  "serde_json",
  "service-kit",
@@ -1872,6 +1880,18 @@ checksum = "ed0423ff9973dea4d6bd075934fdda86ebb8c05bdf9d6b0507067d4a1226371d"
 dependencies = [
  "serde",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "og-db"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]

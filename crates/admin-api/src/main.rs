@@ -3,9 +3,6 @@
 //! Requires DATABASE_URL. Migrations run at startup (idempotent; the k8s
 //! bootstrap migration-job runs the same set).
 
-mod audit;
-mod db;
-mod error;
 mod models;
 mod routes;
 
@@ -25,10 +22,10 @@ enum MainError {
 async fn main() -> Result<(), MainError> {
     service_kit::init_tracing();
     let url = std::env::var("DATABASE_URL").map_err(|_| MainError::MissingDatabaseUrl)?;
-    let db = db::Db::connect(&url).await?;
+    let db = og_db::Db::connect(&url).await?;
     let flag = |k: &str| std::env::var(k).map(|v| v == "1").unwrap_or(false);
     if flag("RUN_MIGRATIONS") || flag("MIGRATE_ONLY") {
-        db.migrate().await?;
+        db.run_migrations(&sqlx::migrate!("./migrations")).await?;
         tracing::info!("migrations applied");
     }
     if flag("MIGRATE_ONLY") {
