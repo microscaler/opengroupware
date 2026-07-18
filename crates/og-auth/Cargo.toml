@@ -18,5 +18,11 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 base64 = "0.22"
 
+[features]
+# `mock` exposes MockIdp: an in-process sesame stand-in for CI/integration
+# tests — generates a key, serves an RFC-8037 JWKS, and mints valid tokens,
+# so consumers can exercise the real fetch+verify path without a live sesame.
+mock = []
+
 [lints]
 workspace = true

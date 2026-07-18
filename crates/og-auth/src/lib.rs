@@ -14,6 +14,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+#[cfg(feature = "mock")]
+pub mod mock;
+
 use axum::extract::{Request, State};
 use axum::http::StatusCode;
 use axum::middleware::Next;
@@ -197,6 +200,15 @@ impl Authenticator {
             });
         }
         let token = bearer(headers).ok_or(AuthError::MissingToken)?;
+        self.verify(token).await
+    }
+
+    /// Verify a raw bearer token string (no header parsing). Useful for
+    /// integration tests and non-HTTP callers.
+    ///
+    /// # Errors
+    /// Returns [`AuthError`] when the token is malformed or fails verification.
+    pub async fn caller_bearer(&self, token: &str) -> Result<Caller, AuthError> {
         self.verify(token).await
     }
 

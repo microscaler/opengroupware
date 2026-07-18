@@ -128,8 +128,10 @@ spec:
               value: "postgres://og_app:$(DB_PASSWORD)@og-postgres:5432/opengroupware"
             # sesame token verification (PRD F4) — enforcement ON. A valid
             # Bearer from sesame is required; unauthenticated → 401.
+            # sesame serves JWKS under the /idam/v1 prefix (confirmed live +
+            # matches loadlinker's config), NOT the bare /.well-known path.
             - name: OG_AUTH_JWKS_URL
-              value: "http://identity-session-service.sesame-idam.svc.cluster.local:8080/.well-known/jwks.json"
+              value: "http://identity-session-service.sesame-idam.svc.cluster.local:8080/idam/v1/.well-known/jwks.json"
             - name: OG_AUTH_ISSUER
               value: "https://idam.example.com"
           livenessProbe:

@@ -1,0 +1,26 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: jwks-probe
+  namespace: sesame-idam
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: probe
+          image: curlimages/curl:8.11.0
+          command: ["sh", "-c"]
+          args:
+            - |
+              H=http://identity-session-service:8080
+              for p in /.well-known/jwks.json /idam/v1/.well-known/jwks.json /idam/.well-known/jwks.json /jwks.json; do
+                echo "$p -> $(curl -s -o /dev/null -w '%{http_code}' -m 6 $H$p)"
+              done
+              echo "=== body @ /idam/v1/.well-known/jwks.json ==="
+              curl -s -m 6 $H/idam/v1/.well-known/jwks.json
+              echo
+              echo "=== body @ /.well-known/jwks.json ==="
+              curl -s -m 6 $H/.well-known/jwks.json
+              echo
