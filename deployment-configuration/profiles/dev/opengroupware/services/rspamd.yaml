@@ -1,0 +1,130 @@
+---
+# Rspamd abuse-scoring engine + config-compiler co-located.
+#
+# k3s has no ReadWriteMany storage, so config-compiler (which renders the
+# per-tenant Rspamd `settings` from control-plane desired state) runs INSIDE
+# this pod and writes to a shared emptyDir mounted at Rspamd's local.d:
+#   * initContainer (RENDER_ONCE) populates settings.conf before Rspamd boots,
+#     so Rspamd starts with the current per-tenant thresholds.
+#   * sidecar keeps re-rendering on its interval as desired state changes.
+#
+# Caveat (follow-up): Rspamd reads local.d on boot; picking up later re-renders
+# live needs a reload signal (shareProcessNamespace + SIGHUP, or the controller
+# reload command). Redis-backed modules are not configured yet — static rules
+# and the settings module (what we rely on) work without Redis.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rspamd
+  namespace: opengroupware
+  labels:
+    app: rspamd
+    app.kubernetes.io/component: abuse-engine
+    app.kubernetes.io/part-of: opengroupware
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: rspamd
+  template:
+    metadata:
+      labels:
+        app: rspamd
+        version: "0.1.0"
+    spec:
+      initContainers:
+        # Render the current settings so Rspamd boots configured.
+        - name: config-compiler-init
+          image: ghcr.io/microscaler/opengroupware/config-compiler:0.1.0
+          imagePullPolicy: IfNotPresent
+          command: ["/app/config-compiler"]
+          env:
+            - name: RENDER_ONCE
+              value: "1"
+            - name: RSPAMD_SETTINGS_PATH
+              value: "/etc/rspamd/local.d/settings.conf"
+            - { name: DB_USER, valueFrom: { secretKeyRef: { name: postgresql-credentials, key: username } } }
+            - { name: DB_PASSWORD, valueFrom: { secretKeyRef: { name: postgresql-credentials, key: password } } }
+            - { name: DB_NAME, valueFrom: { secretKeyRef: { name: postgresql-credentials, key: database } } }
+            - name: DATABASE_URL
+              value: "postgres://$(DB_USER):$(DB_PASSWORD)@pgbouncer:6432/$(DB_NAME)"
+            - name: RUST_LOG
+              value: "info"
+          volumeMounts:
+            - name: rspamd-local
+              mountPath: /etc/rspamd/local.d
+      containers:
+        - name: rspamd
+          # Pin to a digest before production; verified against :latest (3.x).
+          image: docker.io/rspamd/rspamd:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - { name: normal, containerPort: 11333, protocol: TCP }
+            - { name: controller, containerPort: 11334, protocol: TCP }
+          readinessProbe:
+            tcpSocket:
+              port: normal
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: normal
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "768Mi"
+              cpu: "1000m"
+          volumeMounts:
+            - name: rspamd-local
+              mountPath: /etc/rspamd/local.d
+        - name: config-compiler
+          image: ghcr.io/microscaler/opengroupware/config-compiler:0.1.0
+          imagePullPolicy: IfNotPresent
+          command: ["/app/config-compiler"]
+          ports:
+            - { name: http, containerPort: 8083, protocol: TCP }
+          env:
+            - name: RSPAMD_SETTINGS_PATH
+              value: "/etc/rspamd/local.d/settings.conf"
+            - { name: DB_USER, valueFrom: { secretKeyRef: { name: postgresql-credentials, key: username } } }
+            - { name: DB_PASSWORD, valueFrom: { secretKeyRef: { name: postgresql-credentials, key: password } } }
+            - { name: DB_NAME, valueFrom: { secretKeyRef: { name: postgresql-credentials, key: database } } }
+            - name: DATABASE_URL
+              value: "postgres://$(DB_USER):$(DB_PASSWORD)@pgbouncer:6432/$(DB_NAME)"
+            - name: RENDER_INTERVAL_SECS
+              value: "60"
+            - name: RUST_LOG
+              value: "info"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          volumeMounts:
+            - name: rspamd-local
+              mountPath: /etc/rspamd/local.d
+      volumes:
+        - name: rspamd-local
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rspamd
+  namespace: opengroupware
+  labels:
+    app: rspamd
+spec:
+  type: ClusterIP
+  ports:
+    - { name: normal, port: 11333, targetPort: 11333, protocol: TCP }
+    - { name: controller, port: 11334, targetPort: 11334, protocol: TCP }
+  selector:
+    app: rspamd

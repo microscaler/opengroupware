@@ -5,6 +5,8 @@ resources:
   - admin-api.yaml
   - abuse-api.yaml
   - job-runner.yaml
-  - config-compiler.yaml
+  # config-compiler now runs as an init container + sidecar inside the rspamd
+  # pod (k3s has no RWX volume to share the rendered settings across pods).
+  - rspamd.yaml
   - webmail.yaml
   - admin-console.yaml

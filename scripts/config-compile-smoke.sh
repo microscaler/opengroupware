@@ -83,9 +83,9 @@ docker exec -e PGPASSWORD="$SU_PW" $C psql -U postgres -d opengroupware -tAc \
 PASS=1
 grep -q "tenant_acme {" "$OUT" 2>/dev/null || { echo "MISS tenant_acme"; PASS=0; }
 grep -q "tenant_globex {" "$OUT" 2>/dev/null || { echo "MISS tenant_globex"; PASS=0; }
-grep -q '"acme.example"' "$OUT" 2>/dev/null || { echo "MISS acme.example"; PASS=0; }
+grep -q '@acme' "$OUT" 2>/dev/null || { echo "MISS acme.example"; PASS=0; }
 if grep -q "ghost" "$OUT" 2>/dev/null; then echo "LEAK suspended tenant ghost"; PASS=0; fi
-if grep -q "old.acme.example" "$OUT" 2>/dev/null; then echo "LEAK suspended domain"; PASS=0; fi
+if grep -q '@old' "$OUT" 2>/dev/null; then echo "LEAK suspended domain"; PASS=0; fi
 # per-tenant thresholds: globex block must carry its custom reject=20, acme the default 15
 GLOBEX_REJECT=$(awk '/tenant_globex \{/{f=1} f&&/reject =/{print $3; exit}' "$OUT" 2>/dev/null)
 ACME_REJECT=$(awk '/tenant_acme \{/{f=1} f&&/reject =/{print $3; exit}' "$OUT" 2>/dev/null)
@@ -95,6 +95,13 @@ AUD=$(docker exec -e PGPASSWORD="$SU_PW" -e PGOPTIONS="-c app.is_platform_admin=
   psql -U postgres -d opengroupware -tAc \
   "SELECT count(*) FROM audit_log WHERE action='config.compiled'")
 [ "$AUD" = "1" ] || { echo "audit count=$AUD (want 1)"; PASS=0; }
+# The rendered file must be VALID Rspamd config — the ultimate consumer test.
+echo "== validate rendered config with rspamd configtest"
+RDIR=/tmp/cc-rspamd/local.d; rm -rf /tmp/cc-rspamd; mkdir -p "$RDIR"; cp "$OUT" "$RDIR/settings.conf"
+CT=$(docker run --rm -v "$RDIR":/etc/rspamd/local.d:ro rspamd/rspamd:latest rspamadm configtest 2>&1)
+echo "$CT" | tail -2
+echo "$CT" | grep -q "syntax OK" || { echo "configtest not OK"; PASS=0; }
+echo "$CT" | grep -qi "nested section" && { echo "configtest: illegal nesting"; PASS=0; }
 echo "== ASSERT pass=$PASS"
 [ "$PASS" = "1" ] && echo "SMOKE_PASS" || echo "SMOKE_FAIL"
 
