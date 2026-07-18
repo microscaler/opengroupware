@@ -14,11 +14,42 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use axum::extract::{Request, State};
+use axum::http::StatusCode;
+use axum::middleware::Next;
+use axum::response::Response;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use ring::signature::{UnparsedPublicKey, ED25519};
 use tokio::sync::RwLock;
 use uuid::Uuid;
+
+/// Centralized authentication middleware. Verifies every request (except the
+/// open `/health` and `/metrics` probes) and inserts the resolved [`Caller`]
+/// into request extensions for handlers to read via `Extension<Caller>`.
+/// Rejects with 401 when enforcing and the token is missing/invalid.
+///
+/// Apply with `axum::middleware::from_fn_with_state(authenticator, require_auth)`.
+///
+/// # Errors
+/// Returns `401 Unauthorized` when enforcing and verification fails.
+pub async fn require_auth(
+    State(auth): State<Authenticator>,
+    mut req: Request,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    let path = req.uri().path();
+    if path == "/health" || path == "/metrics" {
+        return Ok(next.run(req).await);
+    }
+    match auth.caller(req.headers()).await {
+        Ok(caller) => {
+            req.extensions_mut().insert(caller);
+            Ok(next.run(req).await)
+        }
+        Err(_) => Err(StatusCode::UNAUTHORIZED),
+    }
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum AuthError {

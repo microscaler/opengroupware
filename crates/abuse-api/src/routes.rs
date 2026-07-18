@@ -5,13 +5,16 @@
 //! mailbox via Stalwart) are integration points that land with the real
 //! Rspamd/Stalwart clients; here the workflow + audit are real and tested.
 //!
-//! Actor identity: temporary `x-actor` header until the sesame JWKS
-//! middleware lands (PRD-OPENGROUPWARE F4).
+//! Identity: the `og_auth::require_auth` layer verifies every `/api` request
+//! (sesame EdDSA token, PRD F4) and injects the `Caller`; dev falls back to
+//! the `x-actor` header when `OG_AUTH_JWKS_URL` is unset.
 
 use axum::extract::{Path, State};
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::StatusCode;
+use axum::middleware;
 use axum::routing::{get, post};
-use axum::{Json, Router};
+use axum::{Extension, Json, Router};
+use og_auth::Caller;
 use og_db::{record, ApiError, AuditEntry, Db};
 use uuid::Uuid;
 
@@ -43,17 +46,11 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/tenants/{tenant_id}/quarantine/{item_id}/report",
             post(report_item),
         )
+        .layer(middleware::from_fn_with_state(
+            state.auth.clone(),
+            og_auth::require_auth,
+        ))
         .with_state(state)
-}
-
-/// Verified sesame token subject (enforcing) or x-actor header (dev).
-async fn caller(state: &AppState, headers: &HeaderMap) -> Result<String, ApiError> {
-    state
-        .auth
-        .caller(headers)
-        .await
-        .map(|c| c.subject)
-        .map_err(|_| ApiError::Unauthorized)
 }
 
 // ---------------------------------------------------------------------------
@@ -63,7 +60,7 @@ async fn caller(state: &AppState, headers: &HeaderMap) -> Result<String, ApiErro
 async fn record_decision(
     State(state): State<AppState>,
     Path(tenant_id): Path<Uuid>,
-    headers: HeaderMap,
+    Extension(caller): Extension<Caller>,
     Json(req): Json<RecordDecision>,
 ) -> Result<(StatusCode, Json<AbuseDecision>), ApiError> {
     if !VALID_ACTIONS.contains(&req.action.as_str()) {
@@ -81,7 +78,6 @@ async fn record_decision(
     } else {
         req.symbols.clone()
     };
-    let actor = caller(&state, &headers).await?;
 
     let mut tx = state.db.tenant_tx(tenant_id).await?;
     let decision: AbuseDecision = sqlx::query_as(
@@ -126,7 +122,7 @@ async fn record_decision(
         &mut tx,
         AuditEntry {
             tenant_id: Some(tenant_id),
-            actor: &actor,
+            actor: caller.actor(),
             action: "abuse.decision",
             entity_type: "abuse_decision",
             entity_id: decision.id.to_string(),
@@ -166,9 +162,8 @@ async fn list_quarantine(
 async fn release_item(
     State(state): State<AppState>,
     Path((tenant_id, item_id)): Path<(Uuid, Uuid)>,
-    headers: HeaderMap,
+    Extension(caller): Extension<Caller>,
 ) -> Result<Json<QuarantineItem>, ApiError> {
-    let actor = caller(&state, &headers).await?;
     let mut tx = state.db.tenant_tx(tenant_id).await?;
     // Mail-plane re-injection to the recipient mailbox happens via the
     // Stalwart client once wired; here we transition the workflow state.
@@ -180,7 +175,7 @@ async fn release_item(
                    status, reported_as, held_at, resolved_at, resolved_by",
     )
     .bind(item_id)
-    .bind(&actor)
+    .bind(caller.actor())
     .fetch_optional(&mut *tx)
     .await?;
     let item = item.ok_or(ApiError::NotFound)?;
@@ -189,7 +184,7 @@ async fn release_item(
         &mut tx,
         AuditEntry {
             tenant_id: Some(tenant_id),
-            actor: &actor,
+            actor: caller.actor(),
             action: "quarantine.release",
             entity_type: "quarantine_item",
             entity_id: item.id.to_string(),
@@ -204,7 +199,7 @@ async fn release_item(
 async fn report_item(
     State(state): State<AppState>,
     Path((tenant_id, item_id)): Path<(Uuid, Uuid)>,
-    headers: HeaderMap,
+    Extension(caller): Extension<Caller>,
     Json(req): Json<ReportFeedback>,
 ) -> Result<Json<QuarantineItem>, ApiError> {
     if req.verdict != "spam" && req.verdict != "ham" {
@@ -212,7 +207,6 @@ async fn report_item(
             "verdict must be 'spam' or 'ham'".to_string(),
         ));
     }
-    let actor = caller(&state, &headers).await?;
     let mut tx = state.db.tenant_tx(tenant_id).await?;
     // The training signal (feed Rspamd Bayes learn spam/ham) is dispatched by
     // job-runner once the Rspamd client lands; here we record the feedback.
@@ -233,7 +227,7 @@ async fn report_item(
         &mut tx,
         AuditEntry {
             tenant_id: Some(tenant_id),
-            actor: &actor,
+            actor: caller.actor(),
             action: "quarantine.report",
             entity_type: "quarantine_item",
             entity_id: item.id.to_string(),

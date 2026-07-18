@@ -1,0 +1,21 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: og-authtest
+  namespace: opengroupware
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: authtest
+          image: curlimages/curl:8.11.0
+          command: ["sh", "-c"]
+          args:
+            - |
+              B=http://admin-api:8080
+              echo "health (open):        $(curl -s -o /dev/null -w '%{http_code}' $B/health)"
+              echo "POST no token (401):  $(curl -s -o /dev/null -w '%{http_code}' -X POST $B/api/v1/tenants -H 'content-type: application/json' -d '{"slug":"x","name":"y"}')"
+              echo "POST bad token (401): $(curl -s -o /dev/null -w '%{http_code}' -X POST $B/api/v1/tenants -H 'content-type: application/json' -H 'authorization: Bearer aaa.bbb.ccc' -d '{"slug":"x","name":"y"}')"
+              echo "GET list no token:    $(curl -s -o /dev/null -w '%{http_code}' $B/api/v1/tenants)"

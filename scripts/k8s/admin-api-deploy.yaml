@@ -116,7 +116,7 @@ spec:
     spec:
       containers:
         - name: admin-api
-          image: 10.177.76.220:5000/opengroupware/admin-api:dev-2
+          image: 10.177.76.220:5000/opengroupware/admin-api:dev-4
           command: ["/app/admin-api"]
           ports: [{ name: http, containerPort: 8080 }]
           env:
@@ -126,6 +126,12 @@ spec:
               valueFrom: { secretKeyRef: { name: og-db-credentials, key: app-password } }
             - name: DATABASE_URL
               value: "postgres://og_app:$(DB_PASSWORD)@og-postgres:5432/opengroupware"
+            # sesame token verification (PRD F4) — enforcement ON. A valid
+            # Bearer from sesame is required; unauthenticated → 401.
+            - name: OG_AUTH_JWKS_URL
+              value: "http://identity-session-service.sesame-idam.svc.cluster.local:8080/.well-known/jwks.json"
+            - name: OG_AUTH_ISSUER
+              value: "https://idam.example.com"
           livenessProbe:
             httpGet: { path: /health, port: http }
             initialDelaySeconds: 5

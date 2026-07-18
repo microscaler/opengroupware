@@ -1,16 +1,18 @@
 //! Provisioning routes, slice 1: tenants, domains, accounts.
 //!
-//! Actor identity: temporary `x-actor` header until sesame-idam OIDC/JWKS
-//! middleware lands in service-kit (PRD-OPENGROUPWARE-RELYING-PARTY F1/F4).
-//! Accounts are created `pending_provisioning`; the sesame-idam + Stalwart
-//! provisioning calls attach here once the sesame OIDC milestone ships.
+//! Identity: the `og_auth::require_auth` layer verifies every `/api` request
+//! (sesame EdDSA token, PRD F4) and injects the [`Caller`]; handlers read it
+//! via `Extension<Caller>`. In dev (no `OG_AUTH_JWKS_URL`) the layer falls
+//! back to the `x-actor` header. Accounts are created `pending_provisioning`;
+//! the sesame-idam + Stalwart provisioning calls attach here.
 
 use axum::extract::{Path, State};
-use axum::http::HeaderMap;
+use axum::middleware;
 use axum::routing::post;
-use axum::{Json, Router};
+use axum::{Extension, Json, Router};
 use uuid::Uuid;
 
+use og_auth::Caller;
 use og_db::{record, ApiError, AuditEntry, Db};
 
 use crate::models::{
@@ -40,19 +42,11 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/tenants/{tenant_id}/accounts",
             post(create_account).get(list_accounts),
         )
+        .layer(middleware::from_fn_with_state(
+            state.auth.clone(),
+            og_auth::require_auth,
+        ))
         .with_state(state)
-}
-
-/// Resolve the audited actor: a verified sesame token subject when auth is
-/// enforced, else the `x-actor` header (dev). Enforcing mode rejects
-/// unauthenticated requests with 401 (mapped from AuthError below).
-async fn caller(state: &AppState, headers: &HeaderMap) -> Result<String, ApiError> {
-    state
-        .auth
-        .caller(headers)
-        .await
-        .map(|c| c.subject)
-        .map_err(|_| ApiError::Unauthorized)
 }
 
 // ---------------------------------------------------------------------------
@@ -61,11 +55,10 @@ async fn caller(state: &AppState, headers: &HeaderMap) -> Result<String, ApiErro
 
 async fn create_tenant(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    Extension(caller): Extension<Caller>,
     Json(req): Json<CreateTenant>,
 ) -> Result<(axum::http::StatusCode, Json<Tenant>), ApiError> {
     validate_slug(&req.slug)?;
-    let actor = caller(&state, &headers).await?;
     let mut tx = state.db.platform_tx().await?;
     let tenant: Tenant = sqlx::query_as(
         "INSERT INTO tenants (slug, name, plan)
@@ -82,7 +75,7 @@ async fn create_tenant(
         &mut tx,
         AuditEntry {
             tenant_id: Some(tenant.id),
-            actor: &actor,
+            actor: caller.actor(),
             action: "tenant.create",
             entity_type: "tenant",
             entity_id: tenant.id.to_string(),
@@ -112,11 +105,10 @@ async fn list_tenants(State(state): State<AppState>) -> Result<Json<Vec<Tenant>>
 async fn create_domain(
     State(state): State<AppState>,
     Path(tenant_id): Path<Uuid>,
-    headers: HeaderMap,
+    Extension(caller): Extension<Caller>,
     Json(req): Json<CreateDomain>,
 ) -> Result<(axum::http::StatusCode, Json<Domain>), ApiError> {
     validate_fqdn(&req.fqdn)?;
-    let actor = caller(&state, &headers).await?;
     let mut tx = state.db.tenant_tx(tenant_id).await?;
     let domain: Domain = sqlx::query_as(
         "INSERT INTO domains (tenant_id, fqdn)
@@ -132,7 +124,7 @@ async fn create_domain(
         &mut tx,
         AuditEntry {
             tenant_id: Some(tenant_id),
-            actor: &actor,
+            actor: caller.actor(),
             action: "domain.create",
             entity_type: "domain",
             entity_id: domain.id.to_string(),
@@ -165,11 +157,10 @@ async fn list_domains(
 async fn create_account(
     State(state): State<AppState>,
     Path(tenant_id): Path<Uuid>,
-    headers: HeaderMap,
+    Extension(caller): Extension<Caller>,
     Json(req): Json<CreateAccount>,
 ) -> Result<(axum::http::StatusCode, Json<Account>), ApiError> {
     validate_local_part(&req.local_part)?;
-    let actor = caller(&state, &headers).await?;
     let mut tx = state.db.tenant_tx(tenant_id).await?;
 
     // Domain must exist within this tenant (RLS hides other tenants' rows,
@@ -199,7 +190,7 @@ async fn create_account(
         &mut tx,
         AuditEntry {
             tenant_id: Some(tenant_id),
-            actor: &actor,
+            actor: caller.actor(),
             action: "account.create",
             entity_type: "account",
             entity_id: account.id.to_string(),
@@ -214,7 +205,9 @@ async fn create_account(
     // a sesame outage must not fail account creation — reconciliation can
     // retry. Success flips the account active in a second transaction.
     let account = match &state.sesame {
-        Some(sesame) => provision_into_sesame(&state, sesame, tenant_id, account, &actor).await,
+        Some(sesame) => {
+            provision_into_sesame(&state, sesame, tenant_id, account, caller.actor()).await
+        }
         None => account,
     };
 
