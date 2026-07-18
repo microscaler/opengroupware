@@ -33,7 +33,12 @@ async fn main() -> Result<(), MainError> {
     }
     tracing::info!("database connected");
 
-    let app = routes::router(AppState { db });
+    let auth = og_auth::Authenticator::new(og_auth::AuthConfig::from_env());
+    if !auth.enforcing() {
+        tracing::warn!("OG_AUTH_JWKS_URL unset — trusting x-actor header (dev only)");
+    }
+
+    let app = routes::router(AppState { db, auth });
     service_kit::run("abuse-api", 8081, app).await?;
     Ok(())
 }

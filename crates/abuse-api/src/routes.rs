@@ -22,6 +22,7 @@ use crate::models::{
 #[derive(Clone)]
 pub struct AppState {
     pub db: Db,
+    pub auth: og_auth::Authenticator,
 }
 
 pub fn router(state: AppState) -> Router {
@@ -45,12 +46,14 @@ pub fn router(state: AppState) -> Router {
         .with_state(state)
 }
 
-fn actor(headers: &HeaderMap) -> String {
-    headers
-        .get("x-actor")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("unknown")
-        .to_string()
+/// Verified sesame token subject (enforcing) or x-actor header (dev).
+async fn caller(state: &AppState, headers: &HeaderMap) -> Result<String, ApiError> {
+    state
+        .auth
+        .caller(headers)
+        .await
+        .map(|c| c.subject)
+        .map_err(|_| ApiError::Unauthorized)
 }
 
 // ---------------------------------------------------------------------------
@@ -78,6 +81,7 @@ async fn record_decision(
     } else {
         req.symbols.clone()
     };
+    let actor = caller(&state, &headers).await?;
 
     let mut tx = state.db.tenant_tx(tenant_id).await?;
     let decision: AbuseDecision = sqlx::query_as(
@@ -122,7 +126,7 @@ async fn record_decision(
         &mut tx,
         AuditEntry {
             tenant_id: Some(tenant_id),
-            actor: &actor(&headers),
+            actor: &actor,
             action: "abuse.decision",
             entity_type: "abuse_decision",
             entity_id: decision.id.to_string(),
@@ -164,6 +168,7 @@ async fn release_item(
     Path((tenant_id, item_id)): Path<(Uuid, Uuid)>,
     headers: HeaderMap,
 ) -> Result<Json<QuarantineItem>, ApiError> {
+    let actor = caller(&state, &headers).await?;
     let mut tx = state.db.tenant_tx(tenant_id).await?;
     // Mail-plane re-injection to the recipient mailbox happens via the
     // Stalwart client once wired; here we transition the workflow state.
@@ -175,7 +180,7 @@ async fn release_item(
                    status, reported_as, held_at, resolved_at, resolved_by",
     )
     .bind(item_id)
-    .bind(actor(&headers))
+    .bind(&actor)
     .fetch_optional(&mut *tx)
     .await?;
     let item = item.ok_or(ApiError::NotFound)?;
@@ -184,7 +189,7 @@ async fn release_item(
         &mut tx,
         AuditEntry {
             tenant_id: Some(tenant_id),
-            actor: &actor(&headers),
+            actor: &actor,
             action: "quarantine.release",
             entity_type: "quarantine_item",
             entity_id: item.id.to_string(),
@@ -207,6 +212,7 @@ async fn report_item(
             "verdict must be 'spam' or 'ham'".to_string(),
         ));
     }
+    let actor = caller(&state, &headers).await?;
     let mut tx = state.db.tenant_tx(tenant_id).await?;
     // The training signal (feed Rspamd Bayes learn spam/ham) is dispatched by
     // job-runner once the Rspamd client lands; here we record the feedback.
@@ -227,7 +233,7 @@ async fn report_item(
         &mut tx,
         AuditEntry {
             tenant_id: Some(tenant_id),
-            actor: &actor(&headers),
+            actor: &actor,
             action: "quarantine.report",
             entity_type: "quarantine_item",
             entity_id: item.id.to_string(),

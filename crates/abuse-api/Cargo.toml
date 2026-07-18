@@ -12,6 +12,7 @@ path = "src/main.rs"
 [dependencies]
 service-kit = { path = "../service-kit" }
 og-db = { path = "../og-db" }
+og-auth = { path = "../og-auth" }
 types = { workspace = true }
 axum = { workspace = true }
 tokio = { workspace = true }

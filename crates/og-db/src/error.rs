@@ -6,6 +6,8 @@ use axum::Json;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ApiError {
+    #[error("unauthorized")]
+    Unauthorized,
     #[error("not found")]
     NotFound,
     #[error("conflict: {0}")]
@@ -19,6 +21,7 @@ pub enum ApiError {
 impl ApiError {
     fn status(&self) -> StatusCode {
         match self {
+            Self::Unauthorized => StatusCode::UNAUTHORIZED,
             Self::NotFound => StatusCode::NOT_FOUND,
             Self::Conflict(_) => StatusCode::CONFLICT,
             Self::Validation(_) => StatusCode::UNPROCESSABLE_ENTITY,

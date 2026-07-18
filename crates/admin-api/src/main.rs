@@ -44,7 +44,14 @@ async fn main() -> Result<(), MainError> {
         );
     }
 
-    let app = routes::router(AppState { db, sesame });
+    let auth = og_auth::Authenticator::new(og_auth::AuthConfig::from_env());
+    if auth.enforcing() {
+        tracing::info!("sesame token verification enabled (JWKS)");
+    } else {
+        tracing::warn!("OG_AUTH_JWKS_URL unset — trusting x-actor header (dev only)");
+    }
+
+    let app = routes::router(AppState { db, sesame, auth });
     service_kit::run("admin-api", 8080, app).await?;
     Ok(())
 }

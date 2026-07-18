@@ -8,6 +8,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "chrono",
+ "og-auth",
  "og-db",
  "serde",
  "serde_json",
@@ -26,6 +27,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "chrono",
+ "og-auth",
  "og-db",
  "serde",
  "serde_json",
@@ -1880,6 +1882,22 @@ checksum = "ed0423ff9973dea4d6bd075934fdda86ebb8c05bdf9d6b0507067d4a1226371d"
 dependencies = [
  "serde",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "og-auth"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "base64",
+ "reqwest",
+ "ring",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]

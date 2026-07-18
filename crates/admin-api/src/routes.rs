@@ -24,6 +24,9 @@ pub struct AppState {
     /// None when SESAME_* env is absent (dev without an identity stack):
     /// accounts then stay `pending_provisioning` for later reconciliation.
     pub sesame: Option<std::sync::Arc<wrappers::sesame_client::SesameClient>>,
+    /// Verifies sesame EdDSA tokens (PRD F4). In dev (no OG_AUTH_JWKS_URL)
+    /// it trusts the `x-actor` header instead.
+    pub auth: og_auth::Authenticator,
 }
 
 pub fn router(state: AppState) -> Router {
@@ -40,12 +43,16 @@ pub fn router(state: AppState) -> Router {
         .with_state(state)
 }
 
-fn actor(headers: &HeaderMap) -> String {
-    headers
-        .get("x-actor")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("unknown")
-        .to_string()
+/// Resolve the audited actor: a verified sesame token subject when auth is
+/// enforced, else the `x-actor` header (dev). Enforcing mode rejects
+/// unauthenticated requests with 401 (mapped from AuthError below).
+async fn caller(state: &AppState, headers: &HeaderMap) -> Result<String, ApiError> {
+    state
+        .auth
+        .caller(headers)
+        .await
+        .map(|c| c.subject)
+        .map_err(|_| ApiError::Unauthorized)
 }
 
 // ---------------------------------------------------------------------------
@@ -58,6 +65,7 @@ async fn create_tenant(
     Json(req): Json<CreateTenant>,
 ) -> Result<(axum::http::StatusCode, Json<Tenant>), ApiError> {
     validate_slug(&req.slug)?;
+    let actor = caller(&state, &headers).await?;
     let mut tx = state.db.platform_tx().await?;
     let tenant: Tenant = sqlx::query_as(
         "INSERT INTO tenants (slug, name, plan)
@@ -74,7 +82,7 @@ async fn create_tenant(
         &mut tx,
         AuditEntry {
             tenant_id: Some(tenant.id),
-            actor: &actor(&headers),
+            actor: &actor,
             action: "tenant.create",
             entity_type: "tenant",
             entity_id: tenant.id.to_string(),
@@ -108,6 +116,7 @@ async fn create_domain(
     Json(req): Json<CreateDomain>,
 ) -> Result<(axum::http::StatusCode, Json<Domain>), ApiError> {
     validate_fqdn(&req.fqdn)?;
+    let actor = caller(&state, &headers).await?;
     let mut tx = state.db.tenant_tx(tenant_id).await?;
     let domain: Domain = sqlx::query_as(
         "INSERT INTO domains (tenant_id, fqdn)
@@ -123,7 +132,7 @@ async fn create_domain(
         &mut tx,
         AuditEntry {
             tenant_id: Some(tenant_id),
-            actor: &actor(&headers),
+            actor: &actor,
             action: "domain.create",
             entity_type: "domain",
             entity_id: domain.id.to_string(),
@@ -160,6 +169,7 @@ async fn create_account(
     Json(req): Json<CreateAccount>,
 ) -> Result<(axum::http::StatusCode, Json<Account>), ApiError> {
     validate_local_part(&req.local_part)?;
+    let actor = caller(&state, &headers).await?;
     let mut tx = state.db.tenant_tx(tenant_id).await?;
 
     // Domain must exist within this tenant (RLS hides other tenants' rows,
@@ -189,7 +199,7 @@ async fn create_account(
         &mut tx,
         AuditEntry {
             tenant_id: Some(tenant_id),
-            actor: &actor(&headers),
+            actor: &actor,
             action: "account.create",
             entity_type: "account",
             entity_id: account.id.to_string(),
@@ -204,9 +214,7 @@ async fn create_account(
     // a sesame outage must not fail account creation — reconciliation can
     // retry. Success flips the account active in a second transaction.
     let account = match &state.sesame {
-        Some(sesame) => {
-            provision_into_sesame(&state, sesame, tenant_id, account, &actor(&headers)).await
-        }
+        Some(sesame) => provision_into_sesame(&state, sesame, tenant_id, account, &actor).await,
         None => account,
     };
 

@@ -1,0 +1,22 @@
+[package]
+name = "og-auth"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "sesame-idam token verification for opengroupware API services: JWKS fetch/cache + EdDSA (Ed25519) JWT validation"
+license = "AGPL-3.0-or-later"
+
+[dependencies]
+axum = { workspace = true }
+reqwest = { workspace = true }
+ring = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+tokio = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+base64 = "0.22"
+
+[lints]
+workspace = true

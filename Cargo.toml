@@ -12,6 +12,7 @@ members = [
     "crates/admin-console",
     "crates/service-kit",
     "crates/og-db",
+    "crates/og-auth",
 ]
 
 [workspace.package]
