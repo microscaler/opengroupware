@@ -39,6 +39,10 @@ spec:
               value: "info"
             - name: RUST_BACKTRACE
               value: "0"
+            # admin-api base URL (in-cluster Service). The console issues
+            # read-only GETs; in dev admin-api trusts the x-actor header.
+            - name: ADMIN_API_URL
+              value: "http://admin-api:8080"
           livenessProbe:
             httpGet:
               path: /health

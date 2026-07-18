@@ -11,22 +11,14 @@ name = "admin-console"
 path = "src/main.rs"
 
 [dependencies]
-# Leptos — SSR only (no hydrate/wasm bin yet; see docs/13 §code verdict).
-# `ssr` feature is required for leptos_axum server APIs to resolve.
+# Leptos — SSR only, used purely as a server-side templating layer
+# (view! + RenderHtml::to_html). No hydrate/wasm bin (docs/13 §code verdict).
 leptos = { workspace = true, features = ["ssr"] }
-leptos_router = { workspace = true, features = ["ssr"] }
-leptos_axum = { workspace = true }
 
-# Internal
-types = { workspace = true }
-wrappers = { path = "../wrappers" }
-config-schema = { workspace = true }
-
-# Serialization
+# admin-api client
+reqwest = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true }
 uuid = { workspace = true }
-chrono = { workspace = true }
 
 # HTTP server
 axum = { workspace = true }

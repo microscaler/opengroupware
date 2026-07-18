@@ -46,18 +46,12 @@ name = "admin-console"
 version = "0.1.0"
 dependencies = [
  "axum",
- "chrono",
- "config-schema",
  "leptos",
- "leptos_axum",
- "leptos_router",
+ "reqwest",
  "serde",
- "serde_json",
  "tokio",
  "tracing",
- "types",
  "uuid",
- "wrappers",
 ]
 
 [[package]]
