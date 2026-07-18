@@ -39,6 +39,31 @@ spec:
               value: "info"
             - name: RUST_BACKTRACE
               value: "0"
+            # Control-plane DB (same as admin-api). Reads desired state via the
+            # RLS platform-admin path (SET app.is_platform_admin), non-superuser.
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-credentials
+                  key: username
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-credentials
+                  key: password
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-credentials
+                  key: database
+            - name: DATABASE_URL
+              value: "postgres://$(DB_USER):$(DB_PASSWORD)@pgbouncer:6432/$(DB_NAME)"
+            # Rendered Rspamd settings land on a writable volume the Rspamd
+            # deployment will mount (read-only) once it exists.
+            - name: RSPAMD_SETTINGS_PATH
+              value: "/var/lib/opengroupware/rspamd/settings.conf"
+            - name: RENDER_INTERVAL_SECS
+              value: "60"
           livenessProbe:
             httpGet:
               path: /health
@@ -66,6 +91,8 @@ spec:
             - name: config
               mountPath: /etc/opengroupware
               readOnly: true
+            - name: rspamd-out
+              mountPath: /var/lib/opengroupware/rspamd
             - name: logs
               mountPath: /var/log/opengroupware
             - name: tmp
@@ -74,6 +101,8 @@ spec:
         - name: config
           configMap:
             name: config-compiler-config
+        - name: rspamd-out
+          emptyDir: {}
         - name: logs
           emptyDir: {}
         - name: tmp
