@@ -8,7 +8,7 @@
 
 use axum::extract::{Path, State};
 use axum::middleware;
-use axum::routing::post;
+use axum::routing::{get, post};
 use axum::{Extension, Json, Router};
 use uuid::Uuid;
 
@@ -16,8 +16,8 @@ use og_auth::Caller;
 use og_db::{record, ApiError, AuditEntry, Db};
 
 use crate::models::{
-    validate_fqdn, validate_local_part, validate_slug, Account, CreateAccount, CreateDomain,
-    CreateTenant, Domain, Tenant,
+    validate_fqdn, validate_local_part, validate_policy, validate_slug, AbusePolicy, Account,
+    CreateAccount, CreateDomain, CreateTenant, Domain, SetAbusePolicy, Tenant,
 };
 
 #[derive(Clone)]
@@ -41,6 +41,10 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/api/v1/tenants/{tenant_id}/accounts",
             post(create_account).get(list_accounts),
+        )
+        .route(
+            "/api/v1/tenants/{tenant_id}/policy",
+            get(get_policy).put(put_policy),
         )
         .layer(middleware::from_fn_with_state(
             state.auth.clone(),
@@ -290,4 +294,70 @@ async fn list_accounts(
     .await?;
     tx.commit().await?;
     Ok(Json(accounts))
+}
+
+// ---------------------------------------------------------------------------
+// Abuse policy (tenant scope) — desired state consumed by config-compiler
+// ---------------------------------------------------------------------------
+
+/// Return the tenant's effective abuse policy: its stored row, or the platform
+/// defaults when it has never set one.
+async fn get_policy(
+    State(state): State<AppState>,
+    Path(tenant_id): Path<Uuid>,
+) -> Result<Json<AbusePolicy>, ApiError> {
+    let mut tx = state.db.tenant_tx(tenant_id).await?;
+    let policy: Option<AbusePolicy> = sqlx::query_as(
+        "SELECT tenant_id, reject, add_header, greylist, updated_at
+         FROM abuse_policy WHERE tenant_id = $1",
+    )
+    .bind(tenant_id)
+    .fetch_optional(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(Json(
+        policy.unwrap_or_else(|| AbusePolicy::defaults(tenant_id)),
+    ))
+}
+
+/// Upsert the tenant's abuse policy. config-compiler picks it up on its next
+/// compile cycle.
+async fn put_policy(
+    State(state): State<AppState>,
+    Path(tenant_id): Path<Uuid>,
+    Extension(caller): Extension<Caller>,
+    Json(req): Json<SetAbusePolicy>,
+) -> Result<Json<AbusePolicy>, ApiError> {
+    validate_policy(&req)?;
+    let mut tx = state.db.tenant_tx(tenant_id).await?;
+    let policy: AbusePolicy = sqlx::query_as(
+        "INSERT INTO abuse_policy (tenant_id, reject, add_header, greylist)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (tenant_id) DO UPDATE
+           SET reject = $2, add_header = $3, greylist = $4, updated_at = now()
+         RETURNING tenant_id, reject, add_header, greylist, updated_at",
+    )
+    .bind(tenant_id)
+    .bind(req.reject)
+    .bind(req.add_header)
+    .bind(req.greylist)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    record(
+        &mut tx,
+        AuditEntry {
+            tenant_id: Some(tenant_id),
+            actor: caller.actor(),
+            action: "policy.set",
+            entity_type: "abuse_policy",
+            entity_id: tenant_id.to_string(),
+            payload: serde_json::json!({
+                "reject": req.reject, "add_header": req.add_header, "greylist": req.greylist
+            }),
+        },
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(Json(policy))
 }

@@ -40,6 +40,30 @@ pub struct Account {
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct AbusePolicy {
+    pub tenant_id: Uuid,
+    pub reject: f64,
+    pub add_header: f64,
+    pub greylist: f64,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+impl AbusePolicy {
+    /// The effective policy returned when a tenant has no row of its own.
+    /// These mirror the `abuse_policy` column defaults (and the compiler's
+    /// COALESCE fallback), so "no row" and "at defaults" are indistinguishable.
+    pub fn defaults(tenant_id: Uuid) -> Self {
+        Self {
+            tenant_id,
+            reject: 15.0,
+            add_header: 6.0,
+            greylist: 4.0,
+            updated_at: chrono::Utc::now(),
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Requests
 // ---------------------------------------------------------------------------
@@ -73,6 +97,13 @@ pub struct CreateAccount {
 
 fn default_quota() -> i32 {
     1024
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SetAbusePolicy {
+    pub reject: f64,
+    pub add_header: f64,
+    pub greylist: f64,
 }
 
 // ---------------------------------------------------------------------------
@@ -131,6 +162,18 @@ pub fn validate_local_part(local: &str) -> Result<(), ApiError> {
     }
 }
 
+pub fn validate_policy(p: &SetAbusePolicy) -> Result<(), ApiError> {
+    let finite = p.reject.is_finite() && p.add_header.is_finite() && p.greylist.is_finite();
+    let ordered = 0.0 < p.greylist && p.greylist < p.add_header && p.add_header < p.reject;
+    if finite && ordered {
+        Ok(())
+    } else {
+        Err(ApiError::Validation(
+            "thresholds must be finite and satisfy 0 < greylist < add_header < reject".to_string(),
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -164,5 +207,26 @@ mod tests {
         assert!(validate_local_part(".charles").is_err());
         assert!(validate_local_part("charles.").is_err());
         assert!(validate_local_part("Charles").is_err());
+    }
+
+    fn policy(reject: f64, add_header: f64, greylist: f64) -> SetAbusePolicy {
+        SetAbusePolicy {
+            reject,
+            add_header,
+            greylist,
+        }
+    }
+
+    #[test]
+    fn policy_rules() {
+        assert!(validate_policy(&policy(15.0, 6.0, 4.0)).is_ok());
+        // inverted ordering
+        assert!(validate_policy(&policy(4.0, 6.0, 15.0)).is_err());
+        // equal thresholds (must be strictly increasing)
+        assert!(validate_policy(&policy(6.0, 6.0, 4.0)).is_err());
+        // non-positive greylist
+        assert!(validate_policy(&policy(15.0, 6.0, 0.0)).is_err());
+        // non-finite
+        assert!(validate_policy(&policy(f64::NAN, 6.0, 4.0)).is_err());
     }
 }

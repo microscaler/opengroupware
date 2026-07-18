@@ -14,9 +14,10 @@ use std::path::Path;
 use og_db::{record, AuditEntry, Db};
 use serde_json::{json, Value};
 
-/// Default Rspamd action thresholds applied per tenant. These are sane
-/// starting points; a future per-tenant policy model (control-plane column)
-/// will override them without changing the rendering contract.
+/// Default Rspamd action thresholds. A tenant's `abuse_policy` row overrides
+/// these (admin-api `PUT /tenants/{id}/policy`); a tenant without a row falls
+/// back here via the query's COALESCE, so these values are the single source
+/// of truth for "unset".
 const REJECT: f64 = 15.0;
 const ADD_HEADER: f64 = 6.0;
 const GREYLIST: f64 = 4.0;
@@ -34,11 +35,15 @@ pub enum CompileError {
     },
 }
 
-/// One tenant's routing policy: which recipient domains map to its settings.
+/// One tenant's routing policy: which recipient domains map to its settings,
+/// and the action thresholds to apply.
 struct TenantPolicy {
     slug: String,
     settings_id: String,
     domains: Vec<String>,
+    reject: f64,
+    add_header: f64,
+    greylist: f64,
 }
 
 /// Run one compile cycle. Returns the number of tenants written.
@@ -76,35 +81,52 @@ pub async fn compile_once(db: &Db, out_path: &str) -> Result<usize, CompileError
     Ok(policies.len())
 }
 
-/// Read active tenants + their active domains, grouped per tenant.
+/// Read active tenants + their active domains (with each tenant's effective
+/// abuse-policy thresholds, COALESCEd to the platform defaults), grouped per
+/// tenant.
 async fn load_policies(db: &Db) -> Result<Vec<TenantPolicy>, sqlx::Error> {
-    let rows: Vec<(String, String)> = {
+    // COALESCE against the module defaults so a tenant with no policy row
+    // renders identically to one explicitly at defaults.
+    let query = format!(
+        "SELECT t.slug, d.fqdn,
+                COALESCE(ap.reject, {REJECT}) AS reject,
+                COALESCE(ap.add_header, {ADD_HEADER}) AS add_header,
+                COALESCE(ap.greylist, {GREYLIST}) AS greylist
+         FROM tenants t
+         JOIN domains d ON d.tenant_id = t.id
+         LEFT JOIN abuse_policy ap ON ap.tenant_id = t.id
+         WHERE t.status = 'active' AND d.status = 'active'
+         ORDER BY t.slug, d.fqdn"
+    );
+    let rows: Vec<(String, String, f64, f64, f64)> = {
         let mut tx = db.platform_tx().await?;
-        let rows = sqlx::query_as(
-            "SELECT t.slug, d.fqdn
-             FROM tenants t
-             JOIN domains d ON d.tenant_id = t.id
-             WHERE t.status = 'active' AND d.status = 'active'
-             ORDER BY t.slug, d.fqdn",
-        )
-        .fetch_all(&mut *tx)
-        .await?;
+        let rows = sqlx::query_as(&query).fetch_all(&mut *tx).await?;
         tx.commit().await?;
         rows
     };
 
-    let mut grouped: BTreeMap<String, Vec<String>> = BTreeMap::new();
-    for (slug, fqdn) in rows {
-        grouped.entry(slug).or_default().push(fqdn);
+    // Thresholds are per-tenant (constant across a tenant's domain rows); take
+    // them from the first row seen for each tenant.
+    let mut grouped: BTreeMap<String, (Vec<String>, f64, f64, f64)> = BTreeMap::new();
+    for (slug, fqdn, reject, add_header, greylist) in rows {
+        let entry = grouped
+            .entry(slug)
+            .or_insert_with(|| (Vec::new(), reject, add_header, greylist));
+        entry.0.push(fqdn);
     }
 
     Ok(grouped
         .into_iter()
-        .map(|(slug, domains)| TenantPolicy {
-            settings_id: settings_id(&slug),
-            slug,
-            domains,
-        })
+        .map(
+            |(slug, (domains, reject, add_header, greylist))| TenantPolicy {
+                settings_id: settings_id(&slug),
+                slug,
+                domains,
+                reject,
+                add_header,
+                greylist,
+            },
+        )
         .collect())
 }
 
@@ -122,7 +144,7 @@ fn render_doc(policies: &[TenantPolicy]) -> Value {
                 "slug": p.slug,
                 "settings_id": p.settings_id,
                 "domains": p.domains,
-                "actions": { "reject": REJECT, "add_header": ADD_HEADER, "greylist": GREYLIST },
+                "actions": { "reject": p.reject, "add_header": p.add_header, "greylist": p.greylist },
             })
         })
         .collect();
@@ -185,11 +207,14 @@ fn render_ucl(policies: &[TenantPolicy]) -> String {
              priority = 10;\n    \
              rcpt = [{rcpt}];\n    \
              apply {{\n      actions {{\n        \
-             reject = {REJECT};\n        \
-             add_header = {ADD_HEADER};\n        \
-             greylist = {GREYLIST};\n      \
+             reject = {reject};\n        \
+             add_header = {add_header};\n        \
+             greylist = {greylist};\n      \
              }}\n    }}\n  }}\n",
             sid = p.settings_id,
+            reject = p.reject,
+            add_header = p.add_header,
+            greylist = p.greylist,
         );
     }
     s.push_str("}\n");
@@ -218,15 +243,23 @@ mod tests {
 
     fn sample() -> Vec<TenantPolicy> {
         vec![
+            // acme at platform defaults
             TenantPolicy {
                 slug: "acme-corp".to_string(),
                 settings_id: settings_id("acme-corp"),
                 domains: vec!["acme.example".to_string(), "mail.acme.example".to_string()],
+                reject: REJECT,
+                add_header: ADD_HEADER,
+                greylist: GREYLIST,
             },
+            // globex with a custom (stricter) policy
             TenantPolicy {
                 slug: "globex".to_string(),
                 settings_id: settings_id("globex"),
                 domains: vec!["globex.example".to_string()],
+                reject: 20.0,
+                add_header: 8.0,
+                greylist: 5.0,
             },
         ]
     }
@@ -255,6 +288,14 @@ mod tests {
         assert!(ucl.contains("tenant_acme_corp {"));
         assert!(ucl.contains("\"acme.example\", \"mail.acme.example\""));
         assert!(ucl.contains("tenant_globex {"));
-        assert!(ucl.contains("reject = 15"));
+    }
+
+    #[test]
+    fn ucl_reflects_per_tenant_thresholds() {
+        let ucl = render_ucl(&sample());
+        // acme at defaults, globex custom — both must appear.
+        assert!(ucl.contains("reject = 15"), "acme default reject");
+        assert!(ucl.contains("reject = 20"), "globex custom reject");
+        assert!(ucl.contains("greylist = 5"), "globex custom greylist");
     }
 }

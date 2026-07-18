@@ -25,6 +25,7 @@ echo "== waiting for postgres"; sleep 7
 
 echo "== build admin-api + config-compiler (target=$CARGO_TARGET_DIR)"
 cargo build -q -p admin-api -p config-compiler 2>&1 | tail -3
+API_PORT=18080; API=http://127.0.0.1:$API_PORT
 
 echo "== migrate (superuser)"
 PGPASSWORD="$SU_PW" DATABASE_URL="postgres://postgres@127.0.0.1:$DB_PORT/opengroupware" \
@@ -50,6 +51,23 @@ docker exec -e PGPASSWORD="$SU_PW" $C psql -U postgres -d opengroupware -v ON_ER
        ('aaaaaaaa-0000-0000-0000-000000000003','ghost.example','active');" >/dev/null 2>/tmp/cc-seed.log \
   && echo "seed: ok" || { echo "seed: FAIL"; cat /tmp/cc-seed.log; }
 
+echo "== start admin-api (dev: x-actor header, no sesame) and set globex policy via API"
+pkill -x admin-api 2>/dev/null; sleep 1
+PGPASSWORD="$APP_PW" DATABASE_URL="postgres://og_app@127.0.0.1:$DB_PORT/opengroupware" \
+  PORT=$API_PORT nohup "$BIN/admin-api" >/tmp/cc-adminapi.log 2>&1 < /dev/null &
+sleep 3
+echo "-- health: $(curl -s $API/health)"
+echo "-- PUT globex policy (reject=20, add_header=8, greylist=5):"
+curl -s -w " [%{http_code}]" -H "content-type: application/json" -H "x-actor: cc-smoke" \
+  -X PUT -d '{"reject":20.0,"add_header":8.0,"greylist":5.0}' \
+  $API/api/v1/tenants/$T2/policy; echo
+echo "-- GET acme policy (expect defaults 15/6/4):"
+curl -s $API/api/v1/tenants/$T1/policy; echo
+echo "-- reject invalid policy (inverted; expect 422):"
+curl -s -w " [%{http_code}]" -H "content-type: application/json" -H "x-actor: cc-smoke" \
+  -X PUT -d '{"reject":1.0,"add_header":8.0,"greylist":5.0}' \
+  $API/api/v1/tenants/$T2/policy; echo
+
 echo "== run config-compiler one-shot compile"
 PGPASSWORD="$APP_PW" \
   DATABASE_URL="postgres://og_app@127.0.0.1:$DB_PORT/opengroupware" \
@@ -68,6 +86,11 @@ grep -q "tenant_globex {" "$OUT" 2>/dev/null || { echo "MISS tenant_globex"; PAS
 grep -q '"acme.example"' "$OUT" 2>/dev/null || { echo "MISS acme.example"; PASS=0; }
 if grep -q "ghost" "$OUT" 2>/dev/null; then echo "LEAK suspended tenant ghost"; PASS=0; fi
 if grep -q "old.acme.example" "$OUT" 2>/dev/null; then echo "LEAK suspended domain"; PASS=0; fi
+# per-tenant thresholds: globex block must carry its custom reject=20, acme the default 15
+GLOBEX_REJECT=$(awk '/tenant_globex \{/{f=1} f&&/reject =/{print $3; exit}' "$OUT" 2>/dev/null)
+ACME_REJECT=$(awk '/tenant_acme \{/{f=1} f&&/reject =/{print $3; exit}' "$OUT" 2>/dev/null)
+[ "$GLOBEX_REJECT" = "20;" ] || { echo "globex reject=$GLOBEX_REJECT (want 20;)"; PASS=0; }
+[ "$ACME_REJECT" = "15;" ] || { echo "acme reject=$ACME_REJECT (want 15;)"; PASS=0; }
 AUD=$(docker exec -e PGPASSWORD="$SU_PW" -e PGOPTIONS="-c app.is_platform_admin=true" $C \
   psql -U postgres -d opengroupware -tAc \
   "SELECT count(*) FROM audit_log WHERE action='config.compiled'")
@@ -75,5 +98,6 @@ AUD=$(docker exec -e PGPASSWORD="$SU_PW" -e PGOPTIONS="-c app.is_platform_admin=
 echo "== ASSERT pass=$PASS"
 [ "$PASS" = "1" ] && echo "SMOKE_PASS" || echo "SMOKE_FAIL"
 
+pkill -x admin-api 2>/dev/null
 docker rm -f $C >/dev/null 2>&1
 echo "ALL_DONE"
