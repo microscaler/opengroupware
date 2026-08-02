@@ -1,0 +1,20 @@
+[package]
+name = "mediation"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+# Marketplace-mediated messaging: scoped aliases, disintermediation heuristics,
+# and redaction with a sealed original.
+#
+# Deliberately dependency-light and infrastructure-free so the rules can be
+# tuned against a corpus long before any mail plumbing exists. See
+# hauliage/docs/design-mediated-messaging.md.
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+regex = "1"
+once_cell = "1"
+
+[dev-dependencies]
