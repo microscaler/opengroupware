@@ -9,7 +9,7 @@
 #   ./deploy-shared-k8s.sh all
 set -uo pipefail
 
-export KUBECONFIG="${KUBECONFIG:-$HOME/Workspace/microscaler/shared-k8s-cluster/kubeconfig/shared-k8s.yaml}"
+export KUBECONFIG="${KUBECONFIG:-$HOME/Workspace/microscaler/shared-gitops-k8s-cluster/kubeconfig/shared-k8s.yaml}"
 REPO="$HOME/Workspace/microscaler/opengroupware"
 REG=10.177.76.220:5000
 IMG="$REG/opengroupware/admin-api:dev-2"

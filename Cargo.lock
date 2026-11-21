@@ -1857,6 +1857,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "mediation"
+version = "0.1.0"
+dependencies = [
+ "once_cell",
+ "regex",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "memchr"
 version = "2.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4549,3 +4559,35 @@ name = "zmij"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
+
+[[patch.unused]]
+name = "lifeguard"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "lifeguard-derive"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "lifeguard-migrate"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "may_postgres"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "sesame-idam-client"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "brrtrouter"
+version = "0.1.0-alpha.1"
+
+[[patch.unused]]
+name = "brrtrouter_macros"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "microscaler-observability"
+version = "0.1.0"
